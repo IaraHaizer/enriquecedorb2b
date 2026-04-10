@@ -6,6 +6,8 @@ export interface Socio {
   nome: string;
   cargo: string;
   background_provavel: string;
+  is_pep?: boolean;
+  pep_detalhes?: string;
 }
 
 export interface FonteExterna {
@@ -22,6 +24,25 @@ export interface FontesExternas {
   noticias?: FonteExterna;
 }
 
+export interface ContatoAbordagem {
+  nome: string;
+  cargo: string;
+  canal: string;
+  contato: string;
+}
+
+export interface RiscoFinanceiro {
+  protestos: { encontrado: boolean; resumo: string; quantidade_estimada?: number };
+  negativacoes: { encontrado: boolean; resumo: string };
+  regularidade_fiscal: string;
+  nivel_risco: "Baixo" | "Médio" | "Alto" | "Crítico";
+}
+
+export interface SinalCrescimento {
+  tipo: "positivo" | "negativo" | "neutro";
+  descricao: string;
+}
+
 export interface Dossier {
   empresa: {
     nome: string;
@@ -35,6 +56,7 @@ export interface Dossier {
     redes_sociais: string;
     reputacao: string;
     atividade_principal: string;
+    tecnologia_atual?: string;
   };
   socio_principal: {
     nome: string;
@@ -43,9 +65,14 @@ export interface Dossier {
     historico_profissional: string;
     linkedin: string;
     background_provavel: string;
+    is_pep?: boolean;
+    pep_detalhes?: string;
   };
   mapeamento_socios: Socio[];
   fontes_externas?: FontesExternas;
+  risco_financeiro?: RiscoFinanceiro;
+  contatos_abordagem?: ContatoAbordagem[];
+  sinais_crescimento?: SinalCrescimento[];
   insights_estrategicos: {
     janela_oportunidade: string;
     abordagem_personalizada: {
@@ -60,6 +87,9 @@ export interface Dossier {
     o_que_evitar: string;
   };
   logica_group_software: {
+    analise_fit: string;
+    modulos_sugeridos: string[];
+    gancho_venda: string;
     recomendacao_principal: string;
     produtos_sugeridos: string[];
     justificativa: string;

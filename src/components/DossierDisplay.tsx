@@ -2,7 +2,8 @@ import {
   Building2, UserCircle, Users, Target, Lightbulb, ShieldAlert,
   MapPin, Phone, Globe, Award, Briefcase, GraduationCap, Linkedin,
   MessageSquare, AlertTriangle, Package, Database, Sparkles,
-  Search, Scale, Newspaper, ExternalLink, TrendingUp, ChevronDown, ChevronUp
+  Search, Scale, Newspaper, ExternalLink, TrendingUp, ChevronDown, ChevronUp,
+  Shield, AlertCircle, PhoneCall, Mail, Cpu, ArrowUpRight, ArrowDownRight, Minus
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -145,12 +146,11 @@ function LeadScoreWidget({ score }: { score: LeadScore }) {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg font-heading">
           <TrendingUp className="h-5 w-5 text-primary" />
-          Score de Qualificação
+          Score de Qualificação V2
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="flex items-center gap-6">
-          {/* Circular gauge */}
           <div className="relative shrink-0">
             <svg width="128" height="128" viewBox="0 0 128 128">
               <circle cx="64" cy="64" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="8" />
@@ -185,7 +185,7 @@ function LeadScoreWidget({ score }: { score: LeadScore }) {
               className="text-xs text-primary flex items-center gap-1 hover:underline"
             >
               {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              {expanded ? "Ocultar detalhes" : "Ver detalhes"}
+              {expanded ? "Ocultar detalhes" : "Ver detalhes (9 dimensões)"}
             </button>
           </div>
         </div>
@@ -210,11 +210,40 @@ function LeadScoreWidget({ score }: { score: LeadScore }) {
   );
 }
 
+function PepBadge({ isPep, detalhes }: { isPep?: boolean; detalhes?: string }) {
+  if (!isPep) return null;
+  return (
+    <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] px-1.5 py-0 gap-1" title={detalhes || "Pessoa Exposta Politicamente"}>
+      <Shield className="h-2.5 w-2.5" />
+      PEP
+    </Badge>
+  );
+}
+
+function RiscoNivelBadge({ nivel }: { nivel: string }) {
+  const configs: Record<string, { bg: string; text: string; border: string }> = {
+    "Baixo": { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30" },
+    "Médio": { bg: "bg-amber-500/15", text: "text-amber-400", border: "border-amber-500/30" },
+    "Alto": { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/30" },
+    "Crítico": { bg: "bg-red-500/15", text: "text-red-400", border: "border-red-500/30" },
+  };
+  const c = configs[nivel] || configs["Baixo"];
+  return (
+    <Badge className={`${c.bg} ${c.text} ${c.border} text-xs px-2 py-0.5`}>
+      {nivel === "Alto" || nivel === "Crítico" ? <AlertCircle className="h-3 w-3 mr-1" /> : <Shield className="h-3 w-3 mr-1" />}
+      Risco {nivel}
+    </Badge>
+  );
+}
+
 export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDisplayProps) {
   const empresa = dossier.empresa || {} as Dossier["empresa"];
   const socio_principal = dossier.socio_principal || {} as Dossier["socio_principal"];
   const mapeamento_socios = dossier.mapeamento_socios || [];
   const fontes_externas = dossier.fontes_externas;
+  const risco_financeiro = dossier.risco_financeiro;
+  const contatos_abordagem = dossier.contatos_abordagem || [];
+  const sinais_crescimento = dossier.sinais_crescimento || [];
   const insights_estrategicos = dossier.insights_estrategicos || {} as Dossier["insights_estrategicos"];
   const logica_group_software = dossier.logica_group_software || {} as Dossier["logica_group_software"];
 
@@ -296,6 +325,7 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
             </Badge>
           )}
           {empresa.porte && <Badge variant="secondary">{empresa.porte}</Badge>}
+          {risco_financeiro && <RiscoNivelBadge nivel={risco_financeiro.nivel_risco} />}
         </div>
       </div>
 
@@ -312,8 +342,50 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
           <InfoRow label="Telefone" value={empresa.telefone} icon={Phone} source={getFieldSource("telefone", dataSources)} />
           <InfoRow label="Redes Sociais" value={empresa.redes_sociais} icon={Globe} source={getFieldSource("redes_sociais", dataSources)} />
           <InfoRow label="Reputação" value={empresa.reputacao} icon={Award} source={getFieldSource("reputacao", dataSources)} />
+          <InfoRow label="Tecnologia Atual" value={empresa.tecnologia_atual || "Não identificado"} icon={Cpu} source={getFieldSource("tecnologia_atual", dataSources)} />
         </div>
       </SectionCard>
+
+      {/* Risco Financeiro */}
+      {risco_financeiro && (
+        <SectionCard icon={ShieldAlert} title="Risco Financeiro" accent source={dataSources ? "ia" : undefined}>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <RiscoNivelBadge nivel={risco_financeiro.nivel_risco} />
+              <span className="text-sm text-muted-foreground">{risco_financeiro.regularidade_fiscal}</span>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-border/50 p-4 space-y-1">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-orange-400" />
+                  <span className="text-sm font-medium">Protestos</span>
+                  {risco_financeiro.protestos.encontrado ? (
+                    <Badge className="bg-red-500/15 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">Encontrado</Badge>
+                  ) : (
+                    <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] px-1.5 py-0">Limpo</Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">{risco_financeiro.protestos.resumo}</p>
+                {risco_financeiro.protestos.quantidade_estimada != null && risco_financeiro.protestos.quantidade_estimada > 0 && (
+                  <p className="text-xs text-muted-foreground">Qtd. estimada: {risco_financeiro.protestos.quantidade_estimada}</p>
+                )}
+              </div>
+              <div className="rounded-lg border border-border/50 p-4 space-y-1">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-orange-400" />
+                  <span className="text-sm font-medium">Negativações</span>
+                  {risco_financeiro.negativacoes.encontrado ? (
+                    <Badge className="bg-red-500/15 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">Encontrado</Badge>
+                  ) : (
+                    <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] px-1.5 py-0">Limpo</Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">{risco_financeiro.negativacoes.resumo}</p>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+      )}
 
       {/* Fontes Externas */}
       {hasFonteExternaData && (
@@ -327,10 +399,38 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
         </SectionCard>
       )}
 
+      {/* Sinais de Crescimento */}
+      {sinais_crescimento.length > 0 && (
+        <SectionCard icon={TrendingUp} title="Sinais de Crescimento" accent source={dataSources ? "ia" : undefined}>
+          <div className="space-y-2">
+            {sinais_crescimento.map((s, i) => (
+              <div key={i} className="flex items-start gap-3 bg-secondary/50 rounded-md p-3">
+                {s.tipo === "positivo" && <ArrowUpRight className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />}
+                {s.tipo === "negativo" && <ArrowDownRight className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />}
+                {s.tipo === "neutro" && <Minus className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />}
+                <p className="text-sm">{s.descricao}</p>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
       {/* Sócio Principal */}
       <SectionCard icon={UserCircle} title="Perfil do Sócio Principal" accent source={socioSource}>
         <div className="grid md:grid-cols-2 gap-x-8">
-          <InfoRow label="Nome" value={socio_principal.nome} icon={UserCircle} source={getFieldSource("nome", dataSources)} />
+          <div className="flex items-start gap-3 py-2">
+            <UserCircle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground uppercase tracking-wider">Nome</span>
+                <PepBadge isPep={socio_principal.is_pep} detalhes={socio_principal.pep_detalhes} />
+              </div>
+              <p className="text-sm mt-0.5">{socio_principal.nome || "Não identificado"}</p>
+              {socio_principal.is_pep && socio_principal.pep_detalhes && (
+                <p className="text-[10px] text-amber-400 mt-0.5">{socio_principal.pep_detalhes}</p>
+              )}
+            </div>
+          </div>
           <InfoRow label="Cargo" value={socio_principal.cargo} icon={Briefcase} source={getFieldSource("nome", dataSources)} />
           <InfoRow label="Formação Acadêmica" value={socio_principal.formacao_academica} icon={GraduationCap} source={getFieldSource("formacao_academica", dataSources)} />
           <InfoRow label="Background Provável" value={socio_principal.background_provavel} icon={Target} source={getFieldSource("background_provavel", dataSources)} />
@@ -359,6 +459,7 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
                 <TableHead>Nome</TableHead>
                 <TableHead>Cargo</TableHead>
                 <TableHead>Background Provável</TableHead>
+                <TableHead className="w-16">PEP</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -367,6 +468,46 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
                   <TableCell className="font-medium">{s.nome}</TableCell>
                   <TableCell>{s.cargo}</TableCell>
                   <TableCell><Badge variant="outline">{s.background_provavel}</Badge></TableCell>
+                  <TableCell>
+                    {s.is_pep ? (
+                      <PepBadge isPep={s.is_pep} detalhes={s.pep_detalhes} />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </SectionCard>
+      )}
+
+      {/* Contatos para Abordagem */}
+      {contatos_abordagem.length > 0 && (
+        <SectionCard icon={PhoneCall} title="Contatos para Abordagem" accent source={dataSources ? "ia" : undefined}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Cargo</TableHead>
+                <TableHead>Canal</TableHead>
+                <TableHead>Contato</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {contatos_abordagem.map((c, i) => (
+                <TableRow key={i}>
+                  <TableCell className="font-medium">{c.nome}</TableCell>
+                  <TableCell>{c.cargo}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px] gap-1">
+                      {c.canal.toLowerCase().includes("email") && <Mail className="h-2.5 w-2.5" />}
+                      {c.canal.toLowerCase().includes("telefone") && <Phone className="h-2.5 w-2.5" />}
+                      {c.canal.toLowerCase().includes("linkedin") && <Linkedin className="h-2.5 w-2.5" />}
+                      {c.canal}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">{c.contato}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -428,25 +569,23 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
       </SectionCard>
 
       {/* Lógica Group Software */}
-      <SectionCard icon={ShieldAlert} title="Recomendação Group Software" accent source={dataSources ? "ia" : undefined}>
+      <SectionCard icon={Package} title="Recomendação Group Software" accent source={dataSources ? "ia" : undefined}>
         <div className="space-y-4">
-          {/* Análise de Fit */}
-          {(logica_group_software as any).analise_fit && (
+          {logica_group_software.analise_fit && (
             <div>
               <span className="text-xs text-muted-foreground uppercase tracking-wider">Análise de Fit</span>
-              <p className="text-sm mt-1">{(logica_group_software as any).analise_fit}</p>
+              <p className="text-sm mt-1">{logica_group_software.analise_fit}</p>
             </div>
           )}
           <div>
             <span className="text-xs text-muted-foreground uppercase tracking-wider">Recomendação Principal</span>
             <p className="text-sm mt-1 font-medium">{logica_group_software.recomendacao_principal}</p>
           </div>
-          {/* Módulos Sugeridos (new field) */}
-          {((logica_group_software as any).modulos_sugeridos?.length ?? 0) > 0 && (
+          {(logica_group_software.modulos_sugeridos?.length ?? 0) > 0 && (
             <div>
               <span className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Módulos Sugeridos</span>
               <div className="flex flex-wrap gap-2">
-                {(logica_group_software as any).modulos_sugeridos.map((m: string, i: number) => (
+                {logica_group_software.modulos_sugeridos.map((m: string, i: number) => (
                   <Badge key={i} className="bg-primary/10 text-primary border-primary/20">
                     <Package className="h-3 w-3 mr-1" />{m}
                   </Badge>
@@ -454,8 +593,7 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
               </div>
             </div>
           )}
-          {/* Fallback: Produtos Sugeridos (backward compat) */}
-          {!((logica_group_software as any).modulos_sugeridos?.length) && (logica_group_software.produtos_sugeridos?.length ?? 0) > 0 && (
+          {!(logica_group_software.modulos_sugeridos?.length) && (logica_group_software.produtos_sugeridos?.length ?? 0) > 0 && (
             <div>
               <span className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Produtos Sugeridos</span>
               <div className="flex flex-wrap gap-2">
@@ -467,13 +605,12 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
               </div>
             </div>
           )}
-          {/* Gancho de Venda */}
-          {(logica_group_software as any).gancho_venda && (
+          {logica_group_software.gancho_venda && (
             <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
               <span className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                 💡 Gancho de Venda (Pitch)
               </span>
-              <p className="text-sm mt-1 font-medium italic text-primary">"{(logica_group_software as any).gancho_venda}"</p>
+              <p className="text-sm mt-1 font-medium italic text-primary">"{logica_group_software.gancho_venda}"</p>
             </div>
           )}
           <div>
