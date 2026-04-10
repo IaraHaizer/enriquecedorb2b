@@ -2,7 +2,7 @@ import { useState } from "react";
 import { DossierForm } from "@/components/DossierForm";
 import { DossierDisplay } from "@/components/DossierDisplay";
 import { DossierHistory } from "@/components/DossierHistory";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { generateDossier, type Dossier, type InputType } from "@/lib/dossier-api";
 import { Crosshair, RotateCcw, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";

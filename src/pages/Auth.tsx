@@ -12,7 +12,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,14 +25,10 @@ export default function Auth() {
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        toast({ title: "Conta criada!", description: "Você já pode acessar a ferramenta." });
+        toast.success("Conta criada! Você já pode acessar a ferramenta.");
       }
     } catch (error: any) {
-      toast({
-        title: "Erro",
-        description: error.message || "Tente novamente",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Tente novamente");
     } finally {
       setLoading(false);
     }
