@@ -163,7 +163,7 @@ async function setCachedResult(cacheKey: string, result: FirecrawlResult): Promi
   }
 }
 
-async function fetchExternalSources(empresaNome: string, cnpj?: string | null): Promise<FirecrawlResult[]> {
+async function fetchExternalSources(empresaNome: string, cnpj?: string | null, skipCache = false): Promise<FirecrawlResult[]> {
   const searchName = empresaNome || cnpj || "";
   if (!searchName) return [];
 
@@ -177,8 +177,10 @@ async function fetchExternalSources(empresaNome: string, cnpj?: string | null): 
   const results = await Promise.all(
     sources.map(async (s) => {
       const cacheKey = buildCacheKey(empresaNome, cnpj, s.name);
-      const cached = await getCachedResult(cacheKey);
-      if (cached) return cached;
+      if (!skipCache) {
+        const cached = await getCachedResult(cacheKey);
+        if (cached) return cached;
+      }
 
       const fresh = await firecrawlSearch(s.query, s.name, s.opts);
       await setCachedResult(cacheKey, fresh);
