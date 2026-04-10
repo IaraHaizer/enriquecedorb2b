@@ -778,7 +778,8 @@ serve(async (req) => {
 
     if (cnpj) {
       console.log(`Fetching CNPJ data for: ${cnpj}`);
-      const cnpjData = await fetchCnpjData(cnpj);
+      cnpjDataRef = cnpjData;
+      const cnpjData2 = cnpjData;
       if (cnpjData) {
         cnpjContext = formatCnpjContext(cnpjData);
         cnpjDataFound = true;
