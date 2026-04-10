@@ -110,18 +110,83 @@ async function firecrawlSearch(query: string, sourceName: string, options?: { li
   }
 }
 
+function getSupabaseAdmin() {
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return createClient(url, key);
+}
+
+function buildCacheKey(empresaNome: string, cnpj: string | null | undefined, source: string): string {
+  const normalized = (cnpj || empresaNome).replace(/[^\w]/g, "").toLowerCase();
+  return `${normalized}:${source}`;
+}
+
+async function getCachedResult(cacheKey: string): Promise<FirecrawlResult | null> {
+  try {
+    const sb = getSupabaseAdmin();
+    const { data } = await sb
+      .from("firecrawl_cache")
+      .select("*")
+      .eq("cache_key", cacheKey)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
+
+    if (data) {
+      console.log(`[Cache] HIT for ${cacheKey}`);
+      return {
+        source: data.source_name,
+        query: data.query,
+        results: data.results as FirecrawlResult["results"],
+        error: data.error || undefined,
+      };
+    }
+  } catch (err) {
+    console.warn("[Cache] Read error:", err);
+  }
+  return null;
+}
+
+async function setCachedResult(cacheKey: string, result: FirecrawlResult): Promise<void> {
+  try {
+    const sb = getSupabaseAdmin();
+    await sb.from("firecrawl_cache").upsert({
+      cache_key: cacheKey,
+      source_name: result.source,
+      query: result.query,
+      results: result.results,
+      error: result.error || null,
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    }, { onConflict: "cache_key" });
+    console.log(`[Cache] SET for ${cacheKey}`);
+  } catch (err) {
+    console.warn("[Cache] Write error:", err);
+  }
+}
+
 async function fetchExternalSources(empresaNome: string, cnpj?: string | null): Promise<FirecrawlResult[]> {
   const searchName = empresaNome || cnpj || "";
   if (!searchName) return [];
 
-  const searches = [
-    firecrawlSearch(`"${searchName}" site:reclameaqui.com.br`, "reclame_aqui", { limit: 3 }),
-    firecrawlSearch(`"${searchName}" site:jusbrasil.com.br OR site:escavador.com`, "jusbrasil_escavador", { limit: 3 }),
-    firecrawlSearch(`"${searchName}" site:linkedin.com/company`, "linkedin", { limit: 3 }),
-    firecrawlSearch(`"${searchName}" notícias empresa`, "google_news", { limit: 3, tbs: "qdr:y" }),
+  const sources = [
+    { name: "reclame_aqui", query: `"${searchName}" site:reclameaqui.com.br`, opts: { limit: 3 } },
+    { name: "jusbrasil_escavador", query: `"${searchName}" site:jusbrasil.com.br OR site:escavador.com`, opts: { limit: 3 } },
+    { name: "linkedin", query: `"${searchName}" site:linkedin.com/company`, opts: { limit: 3 } },
+    { name: "google_news", query: `"${searchName}" notícias empresa`, opts: { limit: 3, tbs: "qdr:y" } },
   ];
 
-  return Promise.all(searches);
+  const results = await Promise.all(
+    sources.map(async (s) => {
+      const cacheKey = buildCacheKey(empresaNome, cnpj, s.name);
+      const cached = await getCachedResult(cacheKey);
+      if (cached) return cached;
+
+      const fresh = await firecrawlSearch(s.query, s.name, s.opts);
+      await setCachedResult(cacheKey, fresh);
+      return fresh;
+    })
+  );
+
+  return results;
 }
 
 function formatExternalContext(results: FirecrawlResult[]): string {
