@@ -964,7 +964,10 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       );
     }
 
-    // Calculate lead qualification score V2
+    // Inject domain data directly into dossier (not AI-generated)
+    dossier.dominios_associados = domainData.dominios;
+
+    // Calculate lead qualification score V2 (now includes domain data)
     const lead_score = calculateLeadScore(dossier, cnpjDataFound, externalResults);
 
     // Build data_sources metadata
