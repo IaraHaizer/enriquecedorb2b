@@ -5,14 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Crosshair, LogIn, UserPlus } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,14 +25,10 @@ export default function Auth() {
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        toast({ title: "Conta criada!", description: "Você já pode acessar a ferramenta." });
+        toast.success("Conta criada! Você já pode acessar a ferramenta.");
       }
     } catch (error: any) {
-      toast({
-        title: "Erro",
-        description: error.message || "Tente novamente",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Tente novamente");
     } finally {
       setLoading(false);
     }

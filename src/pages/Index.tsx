@@ -2,7 +2,7 @@ import { useState } from "react";
 import { DossierForm } from "@/components/DossierForm";
 import { DossierDisplay } from "@/components/DossierDisplay";
 import { DossierHistory } from "@/components/DossierHistory";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { generateDossier, type Dossier, type InputType } from "@/lib/dossier-api";
 import { Crosshair, RotateCcw, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ export default function Index() {
   const [dossier, setDossier] = useState<Dossier | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { toast } = useToast();
+  
   const { signOut } = useAuth();
 
   const handleSubmit = async (input: string, inputType: InputType) => {
@@ -23,13 +23,9 @@ export default function Index() {
       const result = await generateDossier(input, inputType);
       setDossier(result);
       setRefreshKey((k) => k + 1);
-      toast({ title: "Dossiê gerado com sucesso!", description: `Lead: ${input}` });
+      toast.success(`Dossiê gerado com sucesso! Lead: ${input}`);
     } catch (error) {
-      toast({
-        title: "Erro ao gerar dossiê",
-        description: error instanceof Error ? error.message : "Tente novamente",
-        variant: "destructive",
-      });
+      toast.error(error instanceof Error ? error.message : "Erro ao gerar dossiê. Tente novamente");
     } finally {
       setIsLoading(false);
     }
