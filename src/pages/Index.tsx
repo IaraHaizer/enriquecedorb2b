@@ -73,6 +73,8 @@ export default function Index() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <AppNavLink to="/" icon={Search} label="Pesquisa" active />
+            <AppNavLink to="/ranking" icon={BarChart3} label="Ranking" />
             {dossier && !isLoading && (
               <>
                 <Button variant="ghost" size="sm" onClick={handleForceRefresh} className="text-muted-foreground" disabled={!lastInput}>
