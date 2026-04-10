@@ -430,11 +430,32 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
       {/* Lógica Group Software */}
       <SectionCard icon={ShieldAlert} title="Recomendação Group Software" accent source={dataSources ? "ia" : undefined}>
         <div className="space-y-4">
+          {/* Análise de Fit */}
+          {(logica_group_software as any).analise_fit && (
+            <div>
+              <span className="text-xs text-muted-foreground uppercase tracking-wider">Análise de Fit</span>
+              <p className="text-sm mt-1">{(logica_group_software as any).analise_fit}</p>
+            </div>
+          )}
           <div>
             <span className="text-xs text-muted-foreground uppercase tracking-wider">Recomendação Principal</span>
             <p className="text-sm mt-1 font-medium">{logica_group_software.recomendacao_principal}</p>
           </div>
-          {(logica_group_software.produtos_sugeridos?.length ?? 0) > 0 && (
+          {/* Módulos Sugeridos (new field) */}
+          {((logica_group_software as any).modulos_sugeridos?.length ?? 0) > 0 && (
+            <div>
+              <span className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Módulos Sugeridos</span>
+              <div className="flex flex-wrap gap-2">
+                {(logica_group_software as any).modulos_sugeridos.map((m: string, i: number) => (
+                  <Badge key={i} className="bg-primary/10 text-primary border-primary/20">
+                    <Package className="h-3 w-3 mr-1" />{m}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Fallback: Produtos Sugeridos (backward compat) */}
+          {!((logica_group_software as any).modulos_sugeridos?.length) && (logica_group_software.produtos_sugeridos?.length ?? 0) > 0 && (
             <div>
               <span className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Produtos Sugeridos</span>
               <div className="flex flex-wrap gap-2">
@@ -444,6 +465,15 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
                   </Badge>
                 ))}
               </div>
+            </div>
+          )}
+          {/* Gancho de Venda */}
+          {(logica_group_software as any).gancho_venda && (
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+              <span className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                💡 Gancho de Venda (Pitch)
+              </span>
+              <p className="text-sm mt-1 font-medium italic text-primary">"{(logica_group_software as any).gancho_venda}"</p>
             </div>
           )}
           <div>
