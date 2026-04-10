@@ -299,6 +299,9 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
         </div>
       </div>
 
+      {/* Lead Score */}
+      {leadScore && <LeadScoreWidget score={leadScore} />}
+
       {/* Dados da Empresa */}
       <SectionCard icon={Building2} title="Dados da Empresa" source={empresaSource}>
         <div className="grid md:grid-cols-2 gap-x-8">
