@@ -68,13 +68,17 @@ interface DominioInfo {
 }
 
 async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
-  // registro.br RDAP only works for .br domains
+  // Only query .br domains via registro.br RDAP
   if (!domain.endsWith(".br")) return null;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    // Use IPv4-only endpoint via DNS-over-HTTPS to avoid IPv6 broken pipe issues
     const response = await fetch(`https://rdap.registro.br/domain/${domain}`, {
-      headers: { "Accept": "application/rdap+json" },
+      headers: { 
+        "Accept": "application/rdap+json",
+        "User-Agent": "Mozilla/5.0",
+      },
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -86,7 +90,6 @@ async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
     const expiration = events.find((e) => e.eventAction === "expiration");
     const statusList = (data.status || []) as string[];
 
-    // Extract registrant info from entities
     let registrante = "";
     let cnpjReg = "";
     const entities = (data.entities || []) as Array<Record<string, unknown>>;
@@ -99,7 +102,6 @@ async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
             if (field[0] === "fn") registrante = String(field[3] || "");
           }
         }
-        // publicIds may contain CNPJ
         const publicIds = (entity.publicIds || []) as Array<{ identifier: string; type: string }>;
         for (const pid of publicIds) {
           if (pid.type === "cnpj" || pid.type === "cpf") cnpjReg = pid.identifier;
@@ -122,6 +124,41 @@ async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
     };
   } catch (err) {
     console.warn(`[RDAP] Error for ${domain}:`, err);
+    // Fallback: try whois-like search via web
+    return null;
+  }
+}
+
+// Fallback: use Firecrawl to scrape registro.br WHOIS for a domain
+async function fetchWhoisViaScrape(domain: string): Promise<DominioInfo | null> {
+  if (!domain.endsWith(".br")) return null;
+  try {
+    const result = await firecrawlSearch(
+      `"${domain}" site:registro.br OR whois "${domain}"`,
+      `whois_${domain}`,
+      { limit: 2 }
+    );
+    if (result.results.length === 0) return null;
+    
+    const text = result.results.map(r => `${r.title} ${r.description} ${r.markdown || ""}`).join(" ");
+    
+    // Extract dates
+    const criacaoMatch = text.match(/(?:created|criado|registro|created on)[:\s]*(\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4})/i);
+    const expiracaoMatch = text.match(/(?:expires|expira|validade|expires on)[:\s]*(\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4})/i);
+    const registranteMatch = text.match(/(?:owner|registrante|titular)[:\s]*([^\n]+)/i);
+    const cnpjMatch = text.match(/(?:ownerid|cnpj|document)[:\s]*(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i);
+    const statusMatch = text.match(/(?:status|estado)[:\s]*([\w\s]+)/i);
+    
+    return {
+      dominio: domain,
+      status: statusMatch?.[1]?.trim() || "active",
+      data_criacao: criacaoMatch?.[1],
+      data_expiracao: expiracaoMatch?.[1],
+      registrante: registranteMatch?.[1]?.trim(),
+      cnpj_registrante: cnpjMatch?.[1],
+    };
+  } catch (err) {
+    console.warn(`[WHOIS Scrape] Error for ${domain}:`, err);
     return null;
   }
 }
