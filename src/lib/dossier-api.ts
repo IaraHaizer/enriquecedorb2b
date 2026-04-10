@@ -82,7 +82,7 @@ export async function generateDossier(input: string, inputType: InputType): Prom
     input_type: inputType,
     empresa_nome: dossier.empresa?.nome || null,
     empresa_cnpj: dossier.empresa?.cnpj || null,
-    dossier_data: dossier as unknown as Record<string, unknown>,
+    dossier_data: JSON.parse(JSON.stringify(dossier)),
   }]);
 
   return dossier;
