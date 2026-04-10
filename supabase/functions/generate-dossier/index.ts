@@ -982,13 +982,21 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
         ? ["nome", "cnpj", "situacao", "abertura", "porte", "capital_social", "endereco", "telefone", "atividade_principal", "mapeamento_socios"]
         : [],
       campos_ia: ["redes_sociais", "formacao_academica", "historico_profissional", "linkedin", "background_provavel", "insights_estrategicos", "logica_group_software", "risco_financeiro", "contatos_abordagem", "sinais_crescimento", "tecnologia_atual"],
-      fontes_externas: externalSourcesFound,
-      firecrawl_details: externalResults.map((r) => ({
-        source: r.source,
-        found: r.results.length > 0,
-        count: r.results.length,
-        error: r.error || null,
-      })),
+      fontes_externas: [...externalSourcesFound, ...(domainData.dominios.length > 0 ? ["dominios_whois"] : [])],
+      firecrawl_details: [
+        ...externalResults.map((r) => ({
+          source: r.source,
+          found: r.results.length > 0,
+          count: r.results.length,
+          error: r.error || null,
+        })),
+        {
+          source: "dominios_whois",
+          found: domainData.dominios.length > 0,
+          count: domainData.dominios.length,
+          error: null,
+        },
+      ],
     };
 
     return new Response(
