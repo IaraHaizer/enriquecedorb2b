@@ -19,7 +19,17 @@ export default function Index() {
   const [lastInput, setLastInput] = useState<{ input: string; inputType: InputType } | null>(null);
   
   const { signOut } = useAuth();
+  const location = useLocation();
 
+  // Handle navigation from ranking page
+  useEffect(() => {
+    if (location.state?.dossier) {
+      setDossier(location.state.dossier);
+      setDataSources(null);
+      setLeadScore(null);
+      window.history.replaceState({}, "");
+    }
+  }, [location.state]);
   const handleSubmit = async (input: string, inputType: InputType, skipCache = false) => {
     setIsLoading(true);
     setDossier(null);
