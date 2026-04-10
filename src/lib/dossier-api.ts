@@ -43,6 +43,16 @@ export interface SinalCrescimento {
   descricao: string;
 }
 
+export interface DominioAssociado {
+  dominio: string;
+  status: string;
+  data_criacao?: string;
+  data_expiracao?: string;
+  registrante?: string;
+  cnpj_registrante?: string;
+  nameservers?: string[];
+}
+
 export interface Dossier {
   empresa: {
     nome: string;
@@ -73,6 +83,7 @@ export interface Dossier {
   risco_financeiro?: RiscoFinanceiro;
   contatos_abordagem?: ContatoAbordagem[];
   sinais_crescimento?: SinalCrescimento[];
+  dominios_associados?: DominioAssociado[];
   insights_estrategicos: {
     janela_oportunidade: string;
     abordagem_personalizada: {

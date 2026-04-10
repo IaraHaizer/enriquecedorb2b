@@ -3,7 +3,8 @@ import {
   MapPin, Phone, Globe, Award, Briefcase, GraduationCap, Linkedin,
   MessageSquare, AlertTriangle, Package, Database, Sparkles,
   Search, Scale, Newspaper, ExternalLink, TrendingUp, ChevronDown, ChevronUp,
-  Shield, AlertCircle, PhoneCall, Mail, Cpu, ArrowUpRight, ArrowDownRight, Minus
+  Shield, AlertCircle, PhoneCall, Mail, Cpu, ArrowUpRight, ArrowDownRight, Minus,
+  Link2, Server, Calendar
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -244,6 +245,7 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
   const risco_financeiro = dossier.risco_financeiro;
   const contatos_abordagem = dossier.contatos_abordagem || [];
   const sinais_crescimento = dossier.sinais_crescimento || [];
+  const dominios_associados = dossier.dominios_associados || [];
   const insights_estrategicos = dossier.insights_estrategicos || {} as Dossier["insights_estrategicos"];
   const logica_group_software = dossier.logica_group_software || {} as Dossier["logica_group_software"];
 
@@ -345,6 +347,65 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
           <InfoRow label="Tecnologia Atual" value={empresa.tecnologia_atual || "Não identificado"} icon={Cpu} source={getFieldSource("tecnologia_atual", dataSources)} />
         </div>
       </SectionCard>
+
+      {/* Domínios Associados */}
+      {dominios_associados.length > 0 && (
+        <SectionCard icon={Link2} title="Domínios Associados (WHOIS/RDAP)" accent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Domínio</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Criação</TableHead>
+                <TableHead>Expiração</TableHead>
+                <TableHead>Registrante</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {dominios_associados.map((d, i) => (
+                <TableRow key={i}>
+                  <TableCell className="font-medium">
+                    <a href={`https://${d.dominio}`} target="_blank" rel="noopener noreferrer"
+                      className="text-primary hover:underline flex items-center gap-1">
+                      <Globe className="h-3 w-3" />
+                      {d.dominio}
+                    </a>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={d.status.includes("active") ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-muted text-muted-foreground"} variant="outline">
+                      {d.status.includes("active") ? "Ativo" : d.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {d.data_criacao ? (
+                      <span className="flex items-center gap-1"><Calendar className="h-3 w-3 text-muted-foreground" />{d.data_criacao}</span>
+                    ) : "N/I"}
+                  </TableCell>
+                  <TableCell className="text-sm">{d.data_expiracao || "N/I"}</TableCell>
+                  <TableCell className="text-sm">
+                    {d.registrante || "N/I"}
+                    {d.cnpj_registrante && (
+                      <span className="block text-[10px] text-muted-foreground">CNPJ: {d.cnpj_registrante}</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {dominios_associados.some(d => d.nameservers && d.nameservers.length > 0) && (
+            <div className="mt-3 space-y-1">
+              <span className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <Server className="h-3 w-3" /> Nameservers
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {[...new Set(dominios_associados.flatMap(d => d.nameservers || []))].map((ns, i) => (
+                  <Badge key={i} variant="outline" className="text-[10px]">{ns}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </SectionCard>
+      )}
 
       {/* Risco Financeiro */}
       {risco_financeiro && (

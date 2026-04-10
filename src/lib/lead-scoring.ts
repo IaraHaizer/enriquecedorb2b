@@ -47,12 +47,17 @@ export function calcScoreV2(d: Dossier): ScoreResult {
   const societaria = numSocios >= 3 ? 10 : numSocios >= 1 ? 5 : 0;
   breakdown.push({ categoria: "Estrutura Societária", pontos: societaria, max: 10, detalhe: `${numSocios} sócio(s) mapeado(s)` });
 
-  // 4. Presença Digital (max 15)
+  // 4. Presença Digital (max 15) — includes domain data
   let digital = 0;
-  if (d.socio_principal?.linkedin && !["Não encontrado", "Não identificado"].includes(d.socio_principal.linkedin)) digital += 5;
-  if (e?.redes_sociais && !["Não informado", "Não identificado"].includes(e.redes_sociais)) digital += 5;
-  if (d.fontes_externas?.linkedin?.encontrado) digital += 5;
-  breakdown.push({ categoria: "Presença Digital", pontos: Math.min(digital, 15), max: 15, detalhe: digital >= 10 ? "Boa presença online" : "Presença limitada" });
+  if (d.socio_principal?.linkedin && !["Não encontrado", "Não identificado"].includes(d.socio_principal.linkedin)) digital += 3;
+  if (e?.redes_sociais && !["Não informado", "Não identificado"].includes(e.redes_sociais)) digital += 3;
+  if (d.fontes_externas?.linkedin?.encontrado) digital += 3;
+  const dominios = d.dominios_associados || [];
+  if (dominios.length > 0) digital += 3;
+  if (dominios.length >= 2) digital += 3;
+  digital = Math.min(digital, 15);
+  const domainDetail = dominios.length > 0 ? `${dominios.length} domínio(s) registrado(s)` : "";
+  breakdown.push({ categoria: "Presença Digital", pontos: Math.min(digital, 15), max: 15, detalhe: domainDetail || (digital >= 10 ? "Boa presença online" : "Presença limitada") });
 
   // 5. Reputação / Riscos (max 15)
   let reputacao = 10; // base
