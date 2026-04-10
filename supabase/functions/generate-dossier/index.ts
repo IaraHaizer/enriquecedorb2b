@@ -862,12 +862,23 @@ serve(async (req) => {
       empresaNome = input as string;
     }
 
-    // Fetch external sources (now includes 7 sources)
-    console.log(`Fetching external sources...${skip_cache ? " (cache ignorado)" : ""}`);
-    const externalResults = await fetchExternalSources(empresaNome, cnpj, !!skip_cache);
+    // Fetch external sources and domain info in parallel
+    console.log(`Fetching external sources and domains...${skip_cache ? " (cache ignorado)" : ""}`);
+    const [externalResults, domainData] = await Promise.all([
+      fetchExternalSources(empresaNome, cnpj, !!skip_cache),
+      fetchDomainInfo(empresaNome, cnpj, cnpjDataRef, !!skip_cache),
+    ]);
     const externalContext = formatExternalContext(externalResults);
     const externalSourcesFound = externalResults.filter((r) => r.results.length > 0).map((r) => r.source);
     console.log(`External sources found: ${externalSourcesFound.join(", ") || "none"}`);
+    console.log(`Domains found: ${domainData.dominios.length}`);
+
+    // Format domain context for AI
+    const domainContext = domainData.dominios.length > 0
+      ? `\n\n=== DOMÍNIOS ASSOCIADOS (WHOIS/RDAP registro.br) ===\n${domainData.dominios.map(d =>
+        `- ${d.dominio} | Status: ${d.status} | Criado: ${d.data_criacao || "N/I"} | Expira: ${d.data_expiracao || "N/I"} | Registrante: ${d.registrante || "N/I"}${d.cnpj_registrante ? ` (CNPJ: ${d.cnpj_registrante})` : ""}${d.nameservers ? ` | NS: ${d.nameservers.join(", ")}` : ""}`
+      ).join("\n")}\n=== FIM DOMÍNIOS ===`
+      : "";
 
     // Call AI with all context
     const userMessage = `Gere o dossiê completo ENRIQUECIDO para o seguinte lead:
@@ -876,6 +887,7 @@ Dado fornecido: ${input}
 ${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa → CNPJ) ===${cascadeContext}\n=== FIM CASCATA ===` : ""}
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
 ${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual.` : ""}
+${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online.` : ""}
 
 LEMBRETE OBRIGATÓRIO:
 1. Na seção "logica_group_software", use ESTRITAMENTE os produtos dos catálogos Group Software e PartnerBank.
