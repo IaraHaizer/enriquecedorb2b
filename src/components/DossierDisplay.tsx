@@ -49,7 +49,11 @@ function InfoRow({ label, value, icon: Icon }: { label: string; value: string; i
 }
 
 export function DossierDisplay({ dossier }: DossierDisplayProps) {
-  const { empresa, socio_principal, mapeamento_socios, insights_estrategicos, logica_group_software } = dossier;
+  const empresa = dossier.empresa || {} as Dossier["empresa"];
+  const socio_principal = dossier.socio_principal || {} as Dossier["socio_principal"];
+  const mapeamento_socios = dossier.mapeamento_socios || [];
+  const insights_estrategicos = dossier.insights_estrategicos || {} as Dossier["insights_estrategicos"];
+  const logica_group_software = dossier.logica_group_software || {} as Dossier["logica_group_software"];
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6 mt-8">
