@@ -2,7 +2,7 @@ import {
   Building2, UserCircle, Users, Target, Lightbulb, ShieldAlert,
   MapPin, Phone, Globe, Award, Briefcase, GraduationCap, Linkedin,
   MessageSquare, AlertTriangle, Package, Database, Sparkles,
-  Search, Scale, Newspaper, ExternalLink
+  Search, Scale, Newspaper, ExternalLink, TrendingUp, ChevronDown, ChevronUp
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,11 +10,14 @@ import { Separator } from "@/components/ui/separator";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import type { Dossier, DataSources } from "@/lib/dossier-api";
+import { Progress } from "@/components/ui/progress";
+import type { Dossier, DataSources, LeadScore } from "@/lib/dossier-api";
+import { useState } from "react";
 
 interface DossierDisplayProps {
   dossier: Dossier;
   dataSources?: DataSources | null;
+  leadScore?: LeadScore | null;
 }
 
 function SourceBadge({ source }: { source: "receita" | "ia" | "firecrawl" | "reclame_aqui" | "jusbrasil" | "linkedin" | "noticias" }) {
