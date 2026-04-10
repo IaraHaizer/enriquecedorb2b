@@ -165,8 +165,8 @@ export default function LeadRanking() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <NavLink to="/" icon={Search} label="Pesquisa" />
-            <NavLink to="/ranking" icon={BarChart3} label="Ranking" active />
+            <AppNavLink to="/" icon={Search} label="Pesquisa" />
+            <AppNavLink to="/ranking" icon={BarChart3} label="Ranking" active />
             <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground">
               <LogOut className="h-4 w-4 mr-1" /> Sair
             </Button>
