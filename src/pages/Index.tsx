@@ -72,10 +72,15 @@ export default function Index() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {dossier && (
-              <Button variant="ghost" size="sm" onClick={handleNewSearch} className="text-muted-foreground">
-                <RotateCcw className="h-4 w-4 mr-1" /> Nova Pesquisa
-              </Button>
+            {dossier && !isLoading && (
+              <>
+                <Button variant="ghost" size="sm" onClick={handleForceRefresh} className="text-muted-foreground" disabled={!lastInput}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar Dados
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleNewSearch} className="text-muted-foreground">
+                  <RotateCcw className="h-4 w-4 mr-1" /> Nova Pesquisa
+                </Button>
+              </>
             )}
             <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground">
               <LogOut className="h-4 w-4 mr-1" /> Sair
