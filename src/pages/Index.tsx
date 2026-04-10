@@ -23,13 +23,9 @@ export default function Index() {
       const result = await generateDossier(input, inputType);
       setDossier(result);
       setRefreshKey((k) => k + 1);
-      toast({ title: "Dossiê gerado com sucesso!", description: `Lead: ${input}` });
+      toast.success(`Dossiê gerado com sucesso! Lead: ${input}`);
     } catch (error) {
-      toast({
-        title: "Erro ao gerar dossiê",
-        description: error instanceof Error ? error.message : "Tente novamente",
-        variant: "destructive",
-      });
+      toast.error(error instanceof Error ? error.message : "Erro ao gerar dossiê. Tente novamente");
     } finally {
       setIsLoading(false);
     }
