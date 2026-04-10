@@ -3,10 +3,10 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   History, Download, Search, Filter, Building2, Hash, Mail, User,
-  Eye, LogOut, Crosshair, BarChart3, Calendar, X, Flame, Thermometer, Snowflake,
+  Eye, LogOut, Crosshair, BarChart3, Calendar, X,
   ChevronLeft, ChevronRight,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AppNavLink } from "@/components/AppNavLink";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchHistory, type DossierHistoryItem, type Dossier } from "@/lib/dossier-api";
+import { fetchHistory, type DossierHistoryItem } from "@/lib/dossier-api";
+import { calcScoreV2, getClassificacaoV2, SCORE_MAX } from "@/lib/lead-scoring";
 import { useNavigate } from "react-router-dom";
 
 type TypeFilter = "all" | "cnpj" | "email" | "nome";
@@ -28,45 +29,12 @@ type DateFilter = "all" | "today" | "week" | "month";
 const typeIcons: Record<string, typeof Mail> = { email: Mail, cnpj: Hash, nome: User };
 const typeLabels: Record<string, string> = { cnpj: "CNPJ", email: "E-mail", nome: "Nome" };
 
-function calcScore(d: Dossier): number {
-  let score = 0;
-  const e = d.empresa;
-  if (e?.cnpj) score += 10;
-  if (e?.situacao?.toLowerCase().includes("ativa")) score += 10;
-  if (e?.abertura) {
-    const y = new Date().getFullYear() - new Date(e.abertura.split("/").reverse().join("-")).getFullYear();
-    score += Math.min(y >= 5 ? 10 : y >= 2 ? 6 : 3, 10);
-  }
-  if (e?.capital_social) {
-    const v = parseFloat(e.capital_social.replace(/[^\d,]/g, "").replace(",", "."));
-    score += v > 500000 ? 5 : v > 100000 ? 3 : 1;
-  }
-  if (d.socio_principal?.linkedin && d.socio_principal.linkedin !== "Não encontrado") score += 8;
-  if (e?.redes_sociais && e.redes_sociais !== "Não informado") score += 7;
-  if (d.mapeamento_socios?.length > 2) score += 10;
-  else if (d.mapeamento_socios?.length > 0) score += 5;
-  if (d.fontes_externas?.reclame_aqui?.encontrado) score += 5;
-  if (d.fontes_externas?.processos_judiciais?.encontrado) score -= 5;
-  if (d.fontes_externas?.linkedin?.encontrado) score += 5;
-  if (d.fontes_externas?.noticias?.encontrado) score += 5;
-  const fields = Object.values(e || {}).filter((v) => v && v !== "Não informado" && v !== "Não encontrado").length;
-  score += Math.min(Math.floor(fields / 2), 10);
-  return Math.max(0, Math.min(100, score));
-}
-
-function getClassificacao(s: number) {
-  if (s >= 80) return { label: "Muito Quente", color: "text-red-400", bg: "bg-red-500/10", icon: Flame };
-  if (s >= 60) return { label: "Quente", color: "text-orange-400", bg: "bg-orange-500/10", icon: Flame };
-  if (s >= 40) return { label: "Morno", color: "text-yellow-400", bg: "bg-yellow-500/10", icon: Thermometer };
-  return { label: "Frio", color: "text-blue-400", bg: "bg-blue-500/10", icon: Snowflake };
-}
-
 function exportCSV(rows: DossierHistoryItem[]) {
-  const header = "Empresa,CNPJ,Tipo,Input,Score,Classificação,Data\n";
+  const header = "Empresa,CNPJ,Tipo,Input,Score,Max,Percentual,Classificação,Data\n";
   const body = rows.map((r) => {
-    const s = calcScore(r.dossier_data);
-    const c = getClassificacao(s);
-    return `"${r.empresa_nome || ""}","${r.empresa_cnpj || ""}","${typeLabels[r.input_type] || r.input_type}","${r.input}",${s},"${c.label}","${format(new Date(r.created_at), "dd/MM/yyyy HH:mm")}"`;
+    const result = calcScoreV2(r.dossier_data);
+    const c = getClassificacaoV2(result.percentual);
+    return `"${r.empresa_nome || ""}","${r.empresa_cnpj || ""}","${typeLabels[r.input_type] || r.input_type}","${r.input}",${result.total},${SCORE_MAX},${result.percentual}%,"${c.label}","${format(new Date(r.created_at), "dd/MM/yyyy HH:mm")}"`;
   }).join("\n");
   const blob = new Blob([header + body], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -119,7 +87,6 @@ export default function Historico() {
     return list;
   }, [items, search, typeFilter, dateFilter]);
 
-  // Reset page when filters change
   useEffect(() => { setPage(1); }, [search, typeFilter, dateFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -149,7 +116,7 @@ export default function Historico() {
           <div className="flex items-center gap-2">
             <AppNavLink to="/" icon={Search} label="Pesquisa" />
             <AppNavLink to="/ranking" icon={BarChart3} label="Ranking" />
-            <AppNavLink to="/historico" icon={History} label="Histórico" />
+            <AppNavLink to="/historico" icon={History} label="Histórico" active />
             <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground">
               <LogOut className="h-4 w-4 mr-1" /> Sair
             </Button>
@@ -164,7 +131,7 @@ export default function Historico() {
               <History className="h-6 w-6 text-primary" /> Histórico de Dossiês
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Todos os dossiês gerados com filtros avançados e exportação
+              Score V2 · 9 dimensões · {SCORE_MAX} pontos máximos
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -234,7 +201,7 @@ export default function Historico() {
                   <TableHead>Empresa</TableHead>
                   <TableHead className="hidden md:table-cell">CNPJ</TableHead>
                   <TableHead>Tipo</TableHead>
-                  <TableHead>Score</TableHead>
+                  <TableHead>Score V2</TableHead>
                   <TableHead className="hidden sm:table-cell">Data</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
@@ -254,9 +221,9 @@ export default function Historico() {
                   </TableRow>
                 ) : (
                   paginated.map((item, idx) => {
-                    const Icon = typeIcons[item.input_type] || User;
-                    const score = calcScore(item.dossier_data);
-                    const cls = getClassificacao(score);
+                    const TIcon = typeIcons[item.input_type] || User;
+                    const result = calcScoreV2(item.dossier_data);
+                    const cls = getClassificacaoV2(result.percentual);
                     const ClsIcon = cls.icon;
                     const globalIdx = (page - 1) * PAGE_SIZE + idx;
                     return (
@@ -279,7 +246,7 @@ export default function Historico() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
-                            <Icon className="h-3 w-3 mr-1" />
+                            <TIcon className="h-3 w-3 mr-1" />
                             {typeLabels[item.input_type] || item.input_type}
                           </Badge>
                         </TableCell>
@@ -287,7 +254,7 @@ export default function Historico() {
                           <div className="flex items-center gap-1.5">
                             <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-sm font-bold ${cls.bg} ${cls.color}`}>
                               <ClsIcon className="h-3 w-3" />
-                              {score}
+                              {result.total}<span className="text-xs font-normal opacity-60">/{SCORE_MAX}</span>
                             </div>
                           </div>
                         </TableCell>
