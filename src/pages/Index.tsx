@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { DossierForm } from "@/components/DossierForm";
 import { DossierDisplay } from "@/components/DossierDisplay";
 import { DossierHistory } from "@/components/DossierHistory";
 import { toast } from "sonner";
 import { generateDossier, type Dossier, type DataSources, type LeadScore, type InputType } from "@/lib/dossier-api";
-import { Crosshair, RotateCcw, LogOut, RefreshCw } from "lucide-react";
+import { Crosshair, RotateCcw, LogOut, RefreshCw, Search, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppNavLink } from "@/components/AppNavLink";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Index() {
@@ -17,7 +19,17 @@ export default function Index() {
   const [lastInput, setLastInput] = useState<{ input: string; inputType: InputType } | null>(null);
   
   const { signOut } = useAuth();
+  const location = useLocation();
 
+  // Handle navigation from ranking page
+  useEffect(() => {
+    if (location.state?.dossier) {
+      setDossier(location.state.dossier);
+      setDataSources(null);
+      setLeadScore(null);
+      window.history.replaceState({}, "");
+    }
+  }, [location.state]);
   const handleSubmit = async (input: string, inputType: InputType, skipCache = false) => {
     setIsLoading(true);
     setDossier(null);
@@ -72,6 +84,8 @@ export default function Index() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <AppNavLink to="/" icon={Search} label="Pesquisa" active />
+            <AppNavLink to="/ranking" icon={BarChart3} label="Ranking" />
             {dossier && !isLoading && (
               <>
                 <Button variant="ghost" size="sm" onClick={handleForceRefresh} className="text-muted-foreground" disabled={!lastInput}>
