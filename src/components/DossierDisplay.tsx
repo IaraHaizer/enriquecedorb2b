@@ -245,6 +245,7 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
   const risco_financeiro = dossier.risco_financeiro;
   const contatos_abordagem = dossier.contatos_abordagem || [];
   const sinais_crescimento = dossier.sinais_crescimento || [];
+  const dominios_associados = dossier.dominios_associados || [];
   const insights_estrategicos = dossier.insights_estrategicos || {} as Dossier["insights_estrategicos"];
   const logica_group_software = dossier.logica_group_software || {} as Dossier["logica_group_software"];
 
