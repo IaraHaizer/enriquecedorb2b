@@ -526,12 +526,16 @@ serve(async (req) => {
       );
     }
 
-    // 1. Fetch CNPJ data from BrasilAPI
+    // ==================== CASCADE LOGIC ====================
+    // For "nome" inputs: try LinkedIn search → find company → extract CNPJ
     let cnpjContext = "";
     let cnpjDataFound = false;
     let empresaNome = "";
-    const cnpj = extractCnpj(input, input_type);
+    let cascadeContext = "";
+    let cnpj = extractCnpj(input as string, input_type as string);
+
     if (cnpj) {
+      // Direct CNPJ input
       console.log(`Fetching CNPJ data for: ${cnpj}`);
       const cnpjData = await fetchCnpjData(cnpj);
       if (cnpjData) {
@@ -540,11 +544,86 @@ serve(async (req) => {
         empresaNome = (cnpjData.razao_social as string) || (cnpjData.nome_fantasia as string) || "";
         console.log("Successfully fetched CNPJ data from BrasilAPI");
       }
+    } else if (input_type === "nome") {
+      // CASCADE: Nome → LinkedIn → Empresa → CNPJ
+      console.log(`[Cascade] Starting name-based cascade for: "${input}"`);
+      
+      // Step 1: Search LinkedIn for the person
+      const linkedinSearch = await firecrawlSearch(
+        `"${input}" site:linkedin.com/in`, "cascade_linkedin", { limit: 3, lang: "pt-br", country: "br" }
+      );
+      
+      let companyFromLinkedin = "";
+      if (linkedinSearch.results.length > 0) {
+        // Extract company info from LinkedIn results
+        const linkedinContent = linkedinSearch.results
+          .map(r => `${r.title || ""} ${r.description || ""} ${r.markdown?.slice(0, 500) || ""}`)
+          .join(" ");
+        cascadeContext += `\n=== LINKEDIN DO SÓCIO (Cascade) ===\n${linkedinContent.slice(0, 2000)}\n`;
+        console.log(`[Cascade] LinkedIn found ${linkedinSearch.results.length} results`);
+
+        // Try to extract company name from LinkedIn result using simple patterns
+        const companyPatterns = [
+          /(?:at|na|em|@)\s+([A-ZÀ-Ú][A-Za-zÀ-ú\s&.,-]+(?:Ltda|S\.?A\.?|EIRELI|ME|EPP|Administradora|Imobiliária|Imóveis|Gestão|Condomín)[\w.]*)/i,
+          /(?:Gerente|Diretor|Sócio|CEO|Fundador|Proprietário|Administrador)(?:\s+\w+)?\s+(?:at|na|em|-|–|·)\s+([A-ZÀ-Ú][A-Za-zÀ-ú\s&.,-]+)/i,
+        ];
+        for (const pattern of companyPatterns) {
+          const match = linkedinContent.match(pattern);
+          if (match?.[1]) {
+            companyFromLinkedin = match[1].trim();
+            break;
+          }
+        }
+        // Fallback: use title fragments
+        if (!companyFromLinkedin) {
+          for (const r of linkedinSearch.results) {
+            const titleParts = (r.title || "").split(/\s*[-–·|]\s*/);
+            if (titleParts.length >= 2) {
+              companyFromLinkedin = titleParts[titleParts.length - 1].replace(/\s*\|?\s*LinkedIn\s*$/i, "").trim();
+              if (companyFromLinkedin.length > 3) break;
+            }
+          }
+        }
+      }
+
+      if (companyFromLinkedin) {
+        console.log(`[Cascade] Company extracted from LinkedIn: "${companyFromLinkedin}"`);
+        empresaNome = companyFromLinkedin;
+
+        // Step 2: Search for CNPJ of the company
+        const cnpjSearch = await firecrawlSearch(
+          `"${companyFromLinkedin}" CNPJ site:cnpj.biz OR site:casadosdados.com.br OR site:cnpja.com`,
+          "cascade_cnpj", { limit: 3 }
+        );
+
+        if (cnpjSearch.results.length > 0) {
+          const cnpjContent = cnpjSearch.results.map(r => `${r.title} ${r.description} ${r.markdown?.slice(0, 300)}`).join(" ");
+          const cnpjMatch = cnpjContent.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
+          if (cnpjMatch) {
+            cnpj = cnpjMatch[0];
+            console.log(`[Cascade] CNPJ found: ${cnpj}`);
+            const cnpjData = await fetchCnpjData(cnpj);
+            if (cnpjData) {
+              cnpjContext = formatCnpjContext(cnpjData);
+              cnpjDataFound = true;
+              empresaNome = (cnpjData.razao_social as string) || (cnpjData.nome_fantasia as string) || empresaNome;
+              console.log(`[Cascade] Full CNPJ data fetched for: ${empresaNome}`);
+            }
+          }
+        }
+        cascadeContext += `\nEmpresa identificada via LinkedIn: ${empresaNome}${cnpj ? ` (CNPJ: ${cnpj})` : ""}`;
+      } else {
+        console.log(`[Cascade] Could not extract company from LinkedIn, using name as-is`);
+        empresaNome = input as string;
+      }
     }
 
-    // Use input as company name if no CNPJ data
-    if (!empresaNome && input_type === "nome") {
-      empresaNome = input;
+    // Use input as company name if still empty
+    if (!empresaNome && input_type === "email") {
+      empresaNome = (input as string).split("@")[1]?.split(".")[0] || (input as string);
+    }
+    if (!empresaNome) {
+      empresaNome = input as string;
     }
 
     // 2. Fetch external sources in parallel via Firecrawl
@@ -558,8 +637,11 @@ serve(async (req) => {
     const userMessage = `Gere o dossiê completo para o seguinte lead:
 Tipo de input: ${input_type}
 Dado fornecido: ${input}
+${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa → CNPJ) ===${cascadeContext}\n=== FIM CASCATA ===` : ""}
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
-${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê com informações reais de reputação, processos judiciais, perfil LinkedIn e notícias.` : ""}
+${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê.` : ""}
+
+LEMBRETE: Na seção "logica_group_software", use ESTRITAMENTE os produtos dos catálogos Group Software e PartnerBank fornecidos no system prompt. Inclua "analise_fit", "modulos_sugeridos" (nomes exatos dos sites), e "gancho_venda" (copy do site).
 
 Analise profundamente e retorne o JSON estruturado conforme o formato especificado.`;
 
