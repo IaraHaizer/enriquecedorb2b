@@ -12,6 +12,9 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
+  optimizeDeps: {
+    include: ["react", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"],
+  },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
