@@ -134,7 +134,83 @@ function FonteExternaCard({ title, icon: Icon, fonte, badgeSource }: {
   );
 }
 
-export function DossierDisplay({ dossier, dataSources }: DossierDisplayProps) {
+function LeadScoreWidget({ score }: { score: LeadScore }) {
+  const [expanded, setExpanded] = useState(false);
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (score.percentual / 100) * circumference;
+
+  return (
+    <Card className="border-border/50 border-l-4" style={{ borderLeftColor: score.cor }}>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg font-heading">
+          <TrendingUp className="h-5 w-5 text-primary" />
+          Score de Qualificação
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-6">
+          {/* Circular gauge */}
+          <div className="relative shrink-0">
+            <svg width="128" height="128" viewBox="0 0 128 128">
+              <circle cx="64" cy="64" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="8" />
+              <circle
+                cx="64" cy="64" r={radius} fill="none"
+                stroke={score.cor} strokeWidth="8" strokeLinecap="round"
+                strokeDasharray={circumference} strokeDashoffset={offset}
+                transform="rotate(-90 64 64)"
+                className="transition-all duration-1000"
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-2xl font-bold" style={{ color: score.cor }}>{score.total}</span>
+              <span className="text-[10px] text-muted-foreground">/ {score.max}</span>
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-2">
+            <div>
+              <Badge className="text-sm px-3 py-1" style={{ backgroundColor: score.cor + "22", color: score.cor, borderColor: score.cor + "44" }}>
+                {score.classificacao}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {score.classificacao === "Muito Quente" && "Lead altamente qualificado — prioridade máxima para abordagem."}
+              {score.classificacao === "Quente" && "Bom potencial de conversão — agendar contato em breve."}
+              {score.classificacao === "Morno" && "Potencial moderado — qualificar melhor antes de abordar."}
+              {score.classificacao === "Frio" && "Dados insuficientes ou baixo potencial — monitorar."}
+            </p>
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-xs text-primary flex items-center gap-1 hover:underline"
+            >
+              {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              {expanded ? "Ocultar detalhes" : "Ver detalhes"}
+            </button>
+          </div>
+        </div>
+
+        {expanded && (
+          <div className="mt-4 space-y-3">
+            <Separator />
+            {score.breakdown.map((b, i) => (
+              <div key={i} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium">{b.categoria}</span>
+                  <span className="text-muted-foreground">{b.pontos}/{b.max}</span>
+                </div>
+                <Progress value={(b.pontos / b.max) * 100} className="h-1.5" />
+                <p className="text-[10px] text-muted-foreground">{b.detalhe}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDisplayProps) {
   const empresa = dossier.empresa || {} as Dossier["empresa"];
   const socio_principal = dossier.socio_principal || {} as Dossier["socio_principal"];
   const mapeamento_socios = dossier.mapeamento_socios || [];
