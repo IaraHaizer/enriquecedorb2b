@@ -6,12 +6,70 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Fetch real CNPJ data from BrasilAPI (public, no key needed)
+async function fetchCnpjData(cnpj: string): Promise<Record<string, unknown> | null> {
+  try {
+    const cleanCnpj = cnpj.replace(/[^\d]/g, "");
+    if (cleanCnpj.length !== 14) return null;
+
+    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
+    if (!response.ok) {
+      console.warn(`BrasilAPI returned ${response.status} for CNPJ ${cleanCnpj}`);
+      await response.text(); // consume body
+      return null;
+    }
+    return await response.json();
+  } catch (err) {
+    console.warn("Error fetching CNPJ data from BrasilAPI:", err);
+    return null;
+  }
+}
+
+// Try to extract a CNPJ from any input type
+function extractCnpj(input: string, inputType: string): string | null {
+  if (inputType === "cnpj") return input;
+  // Try to find a CNPJ pattern in the input
+  const match = input.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
+  return match ? match[0] : null;
+}
+
+function formatCnpjContext(data: Record<string, unknown>): string {
+  const socios = (data.qsa as Array<Record<string, string>>) || [];
+  const sociosList = socios
+    .map((s) => `  - ${s.nome_socio || s.nome} (${s.qualificacao_socio || s.qual || "N/I"})`)
+    .join("\n");
+
+  const cnaePrincipal = data.cnae_fiscal_descricao || (data.cnae_fiscal ? `Código ${data.cnae_fiscal}` : "N/I");
+  const cnaesSecundarios = (data.cnaes_secundarios as Array<Record<string, unknown>>) || [];
+  const cnaesSecList = cnaesSecundarios.slice(0, 5).map((c) => `  - ${c.descricao}`).join("\n");
+
+  return `
+=== DADOS REAIS DA RECEITA FEDERAL (BrasilAPI) ===
+Razão Social: ${data.razao_social || "N/I"}
+Nome Fantasia: ${data.nome_fantasia || "N/I"}
+CNPJ: ${data.cnpj || "N/I"}
+Situação Cadastral: ${data.descricao_situacao_cadastral || "N/I"}
+Data de Abertura: ${data.data_inicio_atividade || "N/I"}
+Porte: ${data.porte || data.descricao_porte || "N/I"}
+Capital Social: R$ ${data.capital_social ? Number(data.capital_social).toLocaleString("pt-BR") : "N/I"}
+Natureza Jurídica: ${data.natureza_juridica || "N/I"}
+Endereço: ${data.logradouro || ""} ${data.numero || ""}, ${data.bairro || ""} - ${data.municipio || ""}/${data.uf || ""} - CEP ${data.cep || ""}
+Telefone: ${data.ddd_telefone_1 || "N/I"}
+Email: ${data.email || "N/I"}
+Atividade Principal: ${cnaePrincipal}
+${cnaesSecList ? `Atividades Secundárias:\n${cnaesSecList}` : ""}
+Quadro de Sócios (QSA):
+${sociosList || "  Nenhum sócio encontrado"}
+=== FIM DOS DADOS REAIS ===`;
+}
+
 const SYSTEM_PROMPT = `Você é um Especialista em Inteligência Comercial B2B sênior, focado no mercado de ERPs e soluções financeiras para Administradoras de Condomínios e Imobiliárias. Sua missão é transformar dados brutos e fragmentados em um dossiê estratégico de alta conversão.
 
 Diretriz de Escavação (Anti-Alucinação):
 - Receba o input (pode ser apenas E-mail, apenas CNPJ ou apenas Nome).
-- Utilize seu conhecimento para encontrar o "fio da meada": se tiver o e-mail, busque o domínio; se tiver o nome, busque no LinkedIn; se tiver o CNPJ, busque o Quadro de Sócios e Administradores (QSA).
-- Crucial: Se um dado não for encontrado, escreva "Não identificado". Nunca invente perfis ou redes sociais.
+- Quando dados reais da Receita Federal forem fornecidos, USE-OS como base primária. Eles são dados oficiais e confiáveis.
+- Utilize seu conhecimento para complementar e enriquecer os dados reais com análises e insights.
+- Crucial: Se um dado não for encontrado nos dados reais nem no seu conhecimento, escreva "Não identificado". Nunca invente perfis ou redes sociais.
 
 Estrutura do Output (Siga rigorosamente em formato JSON):
 
@@ -96,9 +154,24 @@ serve(async (req) => {
       );
     }
 
+    // Try to fetch real CNPJ data from BrasilAPI
+    let cnpjContext = "";
+    const cnpj = extractCnpj(input, input_type);
+    if (cnpj) {
+      console.log(`Fetching CNPJ data for: ${cnpj}`);
+      const cnpjData = await fetchCnpjData(cnpj);
+      if (cnpjData) {
+        cnpjContext = formatCnpjContext(cnpjData);
+        console.log("Successfully fetched CNPJ data from BrasilAPI");
+      } else {
+        console.log("Could not fetch CNPJ data, proceeding with AI only");
+      }
+    }
+
     const userMessage = `Gere o dossiê completo para o seguinte lead:
 Tipo de input: ${input_type}
 Dado fornecido: ${input}
+${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê. Complemente com suas análises e insights estratégicos.` : ""}
 
 Analise profundamente e retorne o JSON estruturado conforme o formato especificado.`;
 
@@ -150,7 +223,6 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
 
     let dossier;
     try {
-      // Try to parse the JSON, removing any markdown artifacts
       const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       dossier = JSON.parse(cleaned);
     } catch {
