@@ -245,7 +245,15 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
     await setCachedResult(cacheKey, firecrawlResult);
   }
 
-  const rdapResults = (await Promise.all(rdapPromises)).filter(Boolean) as DominioInfo[];
+  let rdapResults = (await Promise.all(rdapPromises)).filter(Boolean) as DominioInfo[];
+  
+  // If RDAP failed (IPv6 issues), try scraping WHOIS for .br candidates
+  if (rdapResults.length === 0) {
+    const brCandidates = candidates.filter(d => d.endsWith(".br")).slice(0, 3);
+    const scrapeResults = await Promise.all(brCandidates.map(d => fetchWhoisViaScrape(d)));
+    rdapResults = scrapeResults.filter(Boolean) as DominioInfo[];
+    console.log(`[Domains] RDAP failed, scrape fallback found ${rdapResults.length} domains`);
+  }
   
   // Extract additional domains from Firecrawl results
   const domainRegex = /([a-z0-9-]+\.(?:com|net|org|com\.br|net\.br|org\.br|inf\.br|adm\.br|imb\.br))\b/gi;
