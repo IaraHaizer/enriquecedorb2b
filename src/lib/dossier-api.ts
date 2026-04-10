@@ -146,8 +146,7 @@ export async function fetchHistory(): Promise<DossierHistoryItem[]> {
   const { data, error } = await supabase
     .from("dossier_history")
     .select("*")
-    .order("created_at", { ascending: false })
-    .limit(50);
+    .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
   return (data || []) as unknown as DossierHistoryItem[];
