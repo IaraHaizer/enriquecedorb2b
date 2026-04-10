@@ -774,6 +774,7 @@ serve(async (req) => {
     let empresaNome = "";
     let cascadeContext = "";
     let cnpj = extractCnpj(input as string, input_type as string);
+    let cnpjDataRef: Record<string, unknown> | null = null;
 
     if (cnpj) {
       console.log(`Fetching CNPJ data for: ${cnpj}`);
