@@ -55,6 +55,165 @@ ${sociosList || "  Nenhum sócio encontrado"}
 === FIM DOS DADOS REAIS ===`;
 }
 
+// ==================== WHOIS / RDAP DOMAIN LOOKUP ====================
+
+interface DominioInfo {
+  dominio: string;
+  status: string;
+  data_criacao?: string;
+  data_expiracao?: string;
+  registrante?: string;
+  cnpj_registrante?: string;
+  nameservers?: string[];
+}
+
+async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
+  try {
+    const response = await fetch(`https://rdap.registro.br/domain/${domain}`, {
+      headers: { "Accept": "application/rdap+json" },
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+
+    const events = (data.events || []) as Array<{ eventAction: string; eventDate: string }>;
+    const registration = events.find((e) => e.eventAction === "registration");
+    const expiration = events.find((e) => e.eventAction === "expiration");
+    const statusList = (data.status || []) as string[];
+
+    // Extract registrant info from entities
+    let registrante = "";
+    let cnpjReg = "";
+    const entities = (data.entities || []) as Array<Record<string, unknown>>;
+    for (const entity of entities) {
+      const roles = (entity.roles || []) as string[];
+      if (roles.includes("registrant")) {
+        const vcardArray = (entity.vcardArray || [])[1] as Array<unknown[]> | undefined;
+        if (vcardArray) {
+          for (const field of vcardArray) {
+            if (field[0] === "fn") registrante = String(field[3] || "");
+          }
+        }
+        // publicIds may contain CNPJ
+        const publicIds = (entity.publicIds || []) as Array<{ identifier: string; type: string }>;
+        for (const pid of publicIds) {
+          if (pid.type === "cnpj" || pid.type === "cpf") cnpjReg = pid.identifier;
+        }
+      }
+    }
+
+    const nameservers = ((data.nameservers || []) as Array<{ ldhName?: string }>)
+      .map((ns) => ns.ldhName || "")
+      .filter(Boolean);
+
+    return {
+      dominio: data.ldhName || domain,
+      status: statusList.join(", ") || "active",
+      data_criacao: registration?.eventDate?.split("T")[0],
+      data_expiracao: expiration?.eventDate?.split("T")[0],
+      registrante: registrante || undefined,
+      cnpj_registrante: cnpjReg || undefined,
+      nameservers: nameservers.length > 0 ? nameservers : undefined,
+    };
+  } catch (err) {
+    console.warn(`[RDAP] Error for ${domain}:`, err);
+    return null;
+  }
+}
+
+function generateCandidateDomains(empresaNome: string, cnpjData: Record<string, unknown> | null): string[] {
+  const candidates: string[] = [];
+  
+  // From email in CNPJ data
+  const email = cnpjData?.email as string | undefined;
+  if (email && email.includes("@")) {
+    const emailDomain = email.split("@")[1];
+    if (emailDomain && !emailDomain.match(/gmail|hotmail|outlook|yahoo|uol|bol|terra|ig\.com/i)) {
+      candidates.push(emailDomain);
+    }
+  }
+
+  // From company name - generate .com.br and .com.br variants
+  const nomeFantasia = (cnpjData?.nome_fantasia as string) || "";
+  const razaoSocial = (cnpjData?.razao_social as string) || empresaNome;
+  
+  for (const nome of [nomeFantasia, razaoSocial]) {
+    if (!nome) continue;
+    const slug = nome
+      .toLowerCase()
+      .replace(/\s*(ltda|s\.?a\.?|eireli|me|epp|administradora|admin|de condomínios?|de imóveis|gestão|serviços?)\s*/gi, "")
+      .replace(/[àáâãä]/g, "a").replace(/[èéêë]/g, "e").replace(/[ìíîï]/g, "i")
+      .replace(/[òóôõö]/g, "o").replace(/[ùúûü]/g, "u").replace(/[ç]/g, "c")
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 30);
+    if (slug.length >= 3) {
+      candidates.push(`${slug}.com.br`);
+      candidates.push(`${slug}.com`);
+    }
+  }
+
+  // Deduplicate
+  return [...new Set(candidates)].slice(0, 6);
+}
+
+async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjData: Record<string, unknown> | null, skipCache = false): Promise<{ dominios: DominioInfo[]; firecrawlDomains: FirecrawlResult }> {
+  const candidates = generateCandidateDomains(empresaNome, cnpjData);
+  console.log(`[Domains] Candidate domains: ${candidates.join(", ")}`);
+
+  // Query RDAP in parallel for candidate domains
+  const rdapPromises = candidates.map((d) => fetchRdapDomain(d));
+  
+  // Also search via Firecrawl for domains registered to this CNPJ
+  const cleanCnpj = cnpj?.replace(/[^\d]/g, "") || "";
+  const firecrawlQuery = cleanCnpj 
+    ? `"${cleanCnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")}" domínio OR site OR whois registro.br`
+    : `"${empresaNome}" domínio site oficial`;
+  
+  const cacheKey = buildCacheKey(empresaNome, cnpj, "dominios_whois");
+  let firecrawlResult: FirecrawlResult;
+  
+  if (!skipCache) {
+    const cached = await getCachedResult(cacheKey);
+    if (cached) {
+      firecrawlResult = cached;
+    } else {
+      firecrawlResult = await firecrawlSearch(firecrawlQuery, "dominios_whois", { limit: 5 });
+      await setCachedResult(cacheKey, firecrawlResult);
+    }
+  } else {
+    firecrawlResult = await firecrawlSearch(firecrawlQuery, "dominios_whois", { limit: 5 });
+    await setCachedResult(cacheKey, firecrawlResult);
+  }
+
+  const rdapResults = (await Promise.all(rdapPromises)).filter(Boolean) as DominioInfo[];
+  
+  // Extract additional domains from Firecrawl results
+  const domainRegex = /([a-z0-9-]+\.(?:com|net|org|com\.br|net\.br|org\.br|inf\.br|adm\.br|imb\.br))\b/gi;
+  const extraDomains = new Set<string>();
+  for (const r of firecrawlResult.results) {
+    const text = `${r.title} ${r.description} ${r.markdown}`;
+    let match;
+    while ((match = domainRegex.exec(text)) !== null) {
+      const d = match[1].toLowerCase();
+      if (!d.match(/registro\.br|google|facebook|instagram|linkedin|twitter|youtube|whois/)) {
+        extraDomains.add(d);
+      }
+    }
+  }
+
+  // RDAP lookup for extra domains found via Firecrawl
+  const existingDomains = new Set(rdapResults.map(r => r.dominio.toLowerCase()));
+  const newDomains = [...extraDomains].filter(d => !existingDomains.has(d) && !candidates.includes(d)).slice(0, 3);
+  if (newDomains.length > 0) {
+    const extraRdap = await Promise.all(newDomains.map(d => fetchRdapDomain(d)));
+    for (const r of extraRdap) {
+      if (r) rdapResults.push(r);
+    }
+  }
+
+  console.log(`[Domains] Found ${rdapResults.length} domains via RDAP`);
+  return { dominios: rdapResults, firecrawlDomains: firecrawlResult };
+}
+
 // ==================== FIRECRAWL SEARCH ====================
 
 interface FirecrawlResult {
