@@ -3,7 +3,8 @@ import {
   MapPin, Phone, Globe, Award, Briefcase, GraduationCap, Linkedin,
   MessageSquare, AlertTriangle, Package, Database, Sparkles,
   Search, Scale, Newspaper, ExternalLink, TrendingUp, ChevronDown, ChevronUp,
-  Shield, AlertCircle, PhoneCall, Mail, Cpu, ArrowUpRight, ArrowDownRight, Minus
+  Shield, AlertCircle, PhoneCall, Mail, Cpu, ArrowUpRight, ArrowDownRight, Minus,
+  Link2, Server, Calendar
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
