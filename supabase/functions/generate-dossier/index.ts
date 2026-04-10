@@ -445,8 +445,8 @@ serve(async (req) => {
     }
 
     // 2. Fetch external sources in parallel via Firecrawl
-    console.log("Fetching external sources...");
-    const externalResults = await fetchExternalSources(empresaNome, cnpj);
+    console.log(`Fetching external sources...${skip_cache ? " (cache ignorado)" : ""}`);
+    const externalResults = await fetchExternalSources(empresaNome, cnpj, !!skip_cache);
     const externalContext = formatExternalContext(externalResults);
     const externalSourcesFound = externalResults.filter((r) => r.results.length > 0).map((r) => r.source);
     console.log(`External sources found: ${externalSourcesFound.join(", ") || "none"}`);
