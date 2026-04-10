@@ -147,21 +147,21 @@ export function DossierDisplay({ dossier }: DossierDisplayProps) {
               <span className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                 <MessageSquare className="h-3 w-3" /> Canal Ideal
               </span>
-              <p className="text-sm mt-1 font-medium">{insights_estrategicos.abordagem_personalizada.canal_ideal}</p>
+              <p className="text-sm mt-1 font-medium">{insights_estrategicos.abordagem_personalizada?.canal_ideal}</p>
             </div>
             <div>
               <span className="text-xs text-muted-foreground uppercase tracking-wider">Tom de Voz</span>
-              <p className="text-sm mt-1 font-medium">{insights_estrategicos.abordagem_personalizada.tom_de_voz}</p>
+              <p className="text-sm mt-1 font-medium">{insights_estrategicos.abordagem_personalizada?.tom_de_voz}</p>
             </div>
             <div>
               <span className="text-xs text-muted-foreground uppercase tracking-wider">Argumento Central</span>
-              <p className="text-sm mt-1 font-medium">{insights_estrategicos.abordagem_personalizada.argumento_central}</p>
+              <p className="text-sm mt-1 font-medium">{insights_estrategicos.abordagem_personalizada?.argumento_central}</p>
             </div>
           </div>
 
           <Separator />
 
-          {insights_estrategicos.ressonancia_por_perfil.length > 0 && (
+          {(insights_estrategicos.ressonancia_por_perfil?.length ?? 0) > 0 && (
             <div>
               <span className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
                 Ressonância por Perfil
