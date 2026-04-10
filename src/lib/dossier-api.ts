@@ -51,6 +51,17 @@ export interface Dossier {
   };
 }
 
+export interface DataSources {
+  receita_federal: boolean;
+  campos_receita: string[];
+  campos_ia: string[];
+}
+
+export interface DossierResult {
+  dossier: Dossier;
+  data_sources: DataSources;
+}
+
 export interface DossierHistoryItem {
   id: string;
   input: string;
