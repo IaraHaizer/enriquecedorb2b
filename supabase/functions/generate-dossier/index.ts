@@ -298,6 +298,104 @@ Lógica de Negócio (Contexto Group Software): Lembre-se que o objetivo final é
 
 IMPORTANTE: Responda SOMENTE com o JSON válido, sem markdown, sem backticks, sem texto adicional.`;
 
+// ==================== LEAD SCORE ====================
+
+interface LeadScoreBreakdown {
+  categoria: string;
+  pontos: number;
+  max: number;
+  detalhe: string;
+}
+
+interface LeadScore {
+  total: number;
+  max: number;
+  percentual: number;
+  classificacao: "Frio" | "Morno" | "Quente" | "Muito Quente";
+  cor: string;
+  breakdown: LeadScoreBreakdown[];
+}
+
+function calculateLeadScore(
+  dossier: Record<string, unknown>,
+  cnpjDataFound: boolean,
+  externalResults: FirecrawlResult[]
+): LeadScore {
+  const breakdown: LeadScoreBreakdown[] = [];
+  const empresa = (dossier.empresa || {}) as Record<string, string>;
+  const socio = (dossier.socio_principal || {}) as Record<string, string>;
+  const socios = (dossier.mapeamento_socios || []) as Array<Record<string, string>>;
+  const fontes = (dossier.fontes_externas || {}) as Record<string, { encontrado?: boolean }>;
+
+  // 1. Dados cadastrais (0-20)
+  let cadastral = 0;
+  if (cnpjDataFound) cadastral += 10;
+  if (empresa.situacao?.toLowerCase().includes("ativa")) cadastral += 5;
+  if (empresa.telefone && empresa.telefone !== "Não identificado") cadastral += 3;
+  if (empresa.endereco && empresa.endereco !== "Não identificado") cadastral += 2;
+  breakdown.push({ categoria: "Dados Cadastrais", pontos: cadastral, max: 20, detalhe: cnpjDataFound ? "CNPJ verificado na Receita Federal" : "Sem dados oficiais" });
+
+  // 2. Maturidade (0-15)
+  let maturidade = 0;
+  const aberturaMatch = empresa.abertura?.match(/(\d+)\s*ano/i);
+  const anos = aberturaMatch ? parseInt(aberturaMatch[1]) : 0;
+  if (anos >= 5) maturidade += 10;
+  else if (anos >= 2) maturidade += 7;
+  else if (anos >= 1) maturidade += 4;
+  const capitalStr = empresa.capital_social?.replace(/[^\d,\.]/g, "") || "0";
+  const capital = parseFloat(capitalStr.replace(/\./g, "").replace(",", ".")) || 0;
+  if (capital >= 100000) maturidade += 5;
+  else if (capital >= 10000) maturidade += 3;
+  breakdown.push({ categoria: "Maturidade", pontos: maturidade, max: 15, detalhe: `${anos} anos, Capital: ${empresa.capital_social || "N/I"}` });
+
+  // 3. Complexidade societária (0-10)
+  let societaria = 0;
+  if (socios.length >= 3) societaria += 10;
+  else if (socios.length >= 2) societaria += 7;
+  else if (socios.length >= 1) societaria += 4;
+  breakdown.push({ categoria: "Estrutura Societária", pontos: societaria, max: 10, detalhe: `${socios.length} sócio(s) mapeado(s)` });
+
+  // 4. Presença digital (0-15)
+  let digital = 0;
+  if (socio.linkedin && socio.linkedin !== "Não identificado") digital += 5;
+  if (empresa.redes_sociais && empresa.redes_sociais !== "Não identificado") digital += 5;
+  if (fontes.linkedin?.encontrado) digital += 5;
+  breakdown.push({ categoria: "Presença Digital", pontos: digital, max: 15, detalhe: digital >= 10 ? "Boa presença online" : "Presença limitada" });
+
+  // 5. Reputação e riscos (0-20)
+  let reputacao = 10; // base neutra
+  if (fontes.reclame_aqui?.encontrado) {
+    reputacao += 5; // tem presença = empresa relevante
+  }
+  if (fontes.processos_judiciais?.encontrado) {
+    reputacao -= 3; // risco judicial
+  }
+  reputacao = Math.max(0, Math.min(20, reputacao));
+  breakdown.push({ categoria: "Reputação / Riscos", pontos: reputacao, max: 20, detalhe: fontes.processos_judiciais?.encontrado ? "Processos judiciais encontrados" : "Sem alertas críticos" });
+
+  // 6. Cobertura de dados (0-20)
+  let cobertura = 0;
+  const externalFound = externalResults.filter(r => r.results.length > 0).length;
+  cobertura += Math.min(12, externalFound * 3);
+  if (socio.formacao_academica && socio.formacao_academica !== "Não identificado") cobertura += 4;
+  if (socio.historico_profissional && socio.historico_profissional !== "Não identificado") cobertura += 4;
+  cobertura = Math.min(20, cobertura);
+  breakdown.push({ categoria: "Cobertura de Dados", pontos: cobertura, max: 20, detalhe: `${externalFound}/4 fontes externas com dados` });
+
+  const total = breakdown.reduce((s, b) => s + b.pontos, 0);
+  const max = 100;
+  const percentual = Math.round((total / max) * 100);
+
+  let classificacao: LeadScore["classificacao"];
+  let cor: string;
+  if (percentual >= 75) { classificacao = "Muito Quente"; cor = "#22c55e"; }
+  else if (percentual >= 55) { classificacao = "Quente"; cor = "#f59e0b"; }
+  else if (percentual >= 35) { classificacao = "Morno"; cor = "#f97316"; }
+  else { classificacao = "Frio"; cor = "#6b7280"; }
+
+  return { total, max, percentual, classificacao, cor, breakdown };
+}
+
 // ==================== MAIN HANDLER ====================
 
 serve(async (req) => {
