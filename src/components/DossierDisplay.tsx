@@ -199,7 +199,7 @@ export function DossierDisplay({ dossier }: DossierDisplayProps) {
             <p className="text-sm mt-1 font-medium">{logica_group_software.recomendacao_principal}</p>
           </div>
 
-          {logica_group_software.produtos_sugeridos.length > 0 && (
+          {(logica_group_software.produtos_sugeridos?.length ?? 0) > 0 && (
             <div>
               <span className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
                 Produtos Sugeridos
