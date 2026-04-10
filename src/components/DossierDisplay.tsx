@@ -348,6 +348,65 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
         </div>
       </SectionCard>
 
+      {/* Domínios Associados */}
+      {dominios_associados.length > 0 && (
+        <SectionCard icon={Link2} title="Domínios Associados (WHOIS/RDAP)" accent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Domínio</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Criação</TableHead>
+                <TableHead>Expiração</TableHead>
+                <TableHead>Registrante</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {dominios_associados.map((d, i) => (
+                <TableRow key={i}>
+                  <TableCell className="font-medium">
+                    <a href={`https://${d.dominio}`} target="_blank" rel="noopener noreferrer"
+                      className="text-primary hover:underline flex items-center gap-1">
+                      <Globe className="h-3 w-3" />
+                      {d.dominio}
+                    </a>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={d.status.includes("active") ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-muted text-muted-foreground"} variant="outline">
+                      {d.status.includes("active") ? "Ativo" : d.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {d.data_criacao ? (
+                      <span className="flex items-center gap-1"><Calendar className="h-3 w-3 text-muted-foreground" />{d.data_criacao}</span>
+                    ) : "N/I"}
+                  </TableCell>
+                  <TableCell className="text-sm">{d.data_expiracao || "N/I"}</TableCell>
+                  <TableCell className="text-sm">
+                    {d.registrante || "N/I"}
+                    {d.cnpj_registrante && (
+                      <span className="block text-[10px] text-muted-foreground">CNPJ: {d.cnpj_registrante}</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {dominios_associados.some(d => d.nameservers && d.nameservers.length > 0) && (
+            <div className="mt-3 space-y-1">
+              <span className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <Server className="h-3 w-3" /> Nameservers
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {[...new Set(dominios_associados.flatMap(d => d.nameservers || []))].map((ns, i) => (
+                  <Badge key={i} variant="outline" className="text-[10px]">{ns}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </SectionCard>
+      )}
+
       {/* Risco Financeiro */}
       {risco_financeiro && (
         <SectionCard icon={ShieldAlert} title="Risco Financeiro" accent source={dataSources ? "ia" : undefined}>
