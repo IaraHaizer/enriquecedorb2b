@@ -210,18 +210,132 @@ function formatExternalContext(results: FirecrawlResult[]): string {
   return `\n\n=== DADOS DE FONTES EXTERNAS (Firecrawl) ===${sections.join("")}\n=== FIM DOS DADOS EXTERNOS ===`;
 }
 
+// ==================== SOURCE OF TRUTH: CATÁLOGO DE PRODUTOS ====================
+
+const GROUP_SOFTWARE_CATALOG = `
+=== CATÁLOGO OFICIAL GROUP SOFTWARE (Fonte: groupsoftware.com.br) ===
+A Group Software é referência há mais de 27 anos no mercado, com +2 milhões de usuários, +100.000 condomínios, +1.000 imobiliárias e +165 shoppings.
+
+SEGMENTO 1 — Gestão de Condomínios (Group Condomínios):
+- Super App para comunicação com condôminos
+- Gestão eficiente de inadimplência e cobrança
+- Pasta de Prestação de Contas em um clique
+- Atendimento online: Chatbot, WhatsApp, PABX
+- Relatórios e dashboards completos
+- Assembleia Digital
+- Faturamento simplificado
+- Conciliação bancária
+- Contas a pagar e receber
+
+SEGMENTO 2 — Gestão de Shopping Center (Group Shoppings):
+- Faturamento de contratos em um clique
+- Gestão de vendas simplificada para faturamento de aluguel
+- Controle completo de inadimplência e acordos
+- Gestão eletrônica de documentos
+- Business Intelligence
+
+SEGMENTO 3 — Gestão de Imobiliária (Group Imobiliárias):
+- CRM Completo
+- Gestão de locações e vendas
+- Controle financeiro integrado com os principais bancos
+- Blockchain e registro de contratos eletrônicos
+- Integração com os maiores portais de divulgação do mercado
+
+SEGMENTO 4 — Gestão para RH e DP (Group RH/DP):
+- Automatização dos processos de folha de pagamento
+- Envio de eSocial em um único monitor
+- App para controle de ponto eletrônico (RHAPP)
+- Controle de benefícios
+- Integração com ERP Financeiro
+
+Group Financeiro:
+- Sistema 100% digital conectando bancos, síndicos, porteiros, condôminos e administradoras
+- Dashboards e relatórios financeiros
+- Pagamento de tarifa somente quando ocorre a baixa do boleto
+- Faturamento simplificado
+- Conciliação bancária
+- Contas a pagar e receber
+
+DIFERENCIAIS:
+- Único ERP completo para gestão de propriedades (gestão de pessoas, financeira, contábil)
+- Maior número de recursos e automações do mercado
+- Pioneiros em IA para atendimento online e APP para comunicação
+- Pasta de prestação de contas em um clique
+- Geração automatizada de remessa, retorno e conciliação
+- Processo de cobrança com envio de alertas automáticos
+=== FIM DO CATÁLOGO GROUP SOFTWARE ===
+`;
+
+const PARTNERBANK_CATALOG = `
+=== CATÁLOGO OFICIAL PARTNERBANK (Fonte: partnerbank.com.br) ===
+O PartnerBank é uma instituição de pagamentos cadastrada no Banco Central. Transforma o sistema em um ERP Banking, automatizando a gestão de pagamentos e recebimentos. +11.000 clientes ativos, +MM boletos processados. Matriz SP/SP, Filial BH/MG.
+
+PRODUTO 1 — Automação de Boletos:
+- Integração do ERP direto com os bancos
+- Geração, registro de remessas de boletos, baixa e conciliação automática direto no ERP
+- Um clique e pronto
+
+PRODUTO 2 — Condomínio Garantido:
+- Empresas que recebem mensalidade obtêm 100% da arrecadação mensal de forma garantida
+- Independente de clientes inadimplentes
+- Compra de dívidas históricas
+
+PRODUTO 3 — Controle de Inadimplência:
+- Boletos podem ser parcelados no cartão de crédito em até 12x
+- Mais opção de pagamento para os clientes
+- Redução efetiva da inadimplência
+
+PRODUTO 4 — Crédito Condominial:
+- Empréstimo para iniciar/finalizar obra, melhoria de infraestrutura, pagar débitos, implantar energia solar
+- Taxas de juros competitivas com o mercado
+- Sem necessidade de fiadores ou bem como garantia
+- Condições exclusivas, prazos flexíveis
+
+PRODUTO 5 — Seguros:
+- Envio dos dados da apólice atual
+- Recebimento em até 24 horas de pelo menos 3 propostas
+- Seguro condominial, residencial ou responsabilidade civil profissional
+- Maiores seguradoras do país com melhores condições de mercado
+
+FAQ:
+- Decursos de prazo: 30 e 60 dias (padrão de mercado, flexível sob demanda)
+- Contato: (31) 4040-4167 ou suporte@partnerbank.com.br
+- Horário: segunda a sexta, 8h às 18h
+=== FIM DO CATÁLOGO PARTNERBANK ===
+`;
+
 // ==================== SYSTEM PROMPT ====================
 
-const SYSTEM_PROMPT = `Você é um Especialista em Inteligência Comercial B2B sênior, focado no mercado de ERPs e soluções financeiras para Administradoras de Condomínios e Imobiliárias. Sua missão é transformar dados brutos e fragmentados em um dossiê estratégico de alta conversão.
+const SYSTEM_PROMPT = `Você é um Especialista em Inteligência Comercial B2B sênior, focado no mercado de ERPs e soluções financeiras para Administradoras de Condomínios, Imobiliárias e Shoppings. Sua missão é transformar dados brutos em um dossiê estratégico de alta conversão.
+
+FONTE DE VERDADE (SOURCE OF TRUTH) — Use ESTRITAMENTE os catálogos abaixo. PROIBIDO mencionar serviços que não estejam listados aqui:
+${GROUP_SOFTWARE_CATALOG}
+${PARTNERBANK_CATALOG}
 
 Diretriz de Escavação (Anti-Alucinação):
-- Receba o input (pode ser apenas E-mail, apenas CNPJ ou apenas Nome).
-- Quando dados reais da Receita Federal forem fornecidos, USE-OS como base primária. Eles são dados oficiais e confiáveis.
-- Quando dados de fontes externas (Reclame Aqui, JusBrasil, LinkedIn, Notícias) forem fornecidos, use-os para enriquecer o dossiê com informações reais.
-- Utilize seu conhecimento para complementar e enriquecer os dados reais com análises e insights.
-- Crucial: Se um dado não for encontrado nos dados reais nem no seu conhecimento, escreva "Não identificado". Nunca invente perfis ou redes sociais.
+- Receba o input (pode ser apenas E-mail, apenas CNPJ ou apenas Nome de pessoa/sócio).
+- Quando dados reais da Receita Federal forem fornecidos, USE-OS como base primária.
+- Quando dados de fontes externas forem fornecidos, use-os para enriquecer o dossiê.
+- Crucial: Se um dado não for encontrado, escreva "Não identificado". Nunca invente.
 
-Estrutura do Output (Siga rigorosamente em formato JSON):
+REGRAS DE RECOMENDAÇÃO (logica_group_software):
+1. Cruze os dados do Lead (tempo de empresa, porte, atividade, perfil dos sócios, dores identificadas) com os módulos EXATOS listados nos catálogos acima.
+2. Se o lead for uma administradora NOVA (< 3 anos): Foque em "automação inicial" — Group Condomínios + Automação de Boletos PartnerBank para profissionalizar a cobrança desde o início.
+3. Se o lead tiver dores financeiras (inadimplência, fluxo de caixa, obras): Cite os benefícios do PartnerBank EXATAMENTE como descritos (Condomínio Garantido: "100% da arrecadação mensal de forma garantida, independente de clientes inadimplentes"; Crédito: "taxas competitivas, sem fiador, sem bem como garantia").
+4. Se o lead for imobiliária: Foque em Group Imobiliárias (CRM, blockchain de contratos, integração com portais).
+5. Se o lead for shopping: Foque em Group Shoppings (faturamento de contratos, BI, gestão de vendas).
+6. Sócio advogado: Foque em Compliance, Assembleia Digital, segurança jurídica.
+7. Muitos sócios: Foque em gestão de processos, produtividade da equipe, dashboards.
+
+ESTRUTURA DO "logica_group_software" NO OUTPUT:
+- "analise_fit": Um parágrafo explicando POR QUE o produto X da Group/PartnerBank resolve a dor Y do lead.
+- "modulos_sugeridos": Lista com nomes EXATOS dos produtos conforme aparecem nos catálogos (ex: "Group Condomínios", "Automação de Boletos PartnerBank", "Condomínio Garantido PartnerBank").
+- "gancho_venda": Uma frase curta usando a COPY do próprio site para facilitar a abordagem do pré-vendas.
+- "recomendacao_principal": Resumo da recomendação principal.
+- "produtos_sugeridos": Lista dos produtos (mantém retrocompatibilidade).
+- "justificativa": Justificativa detalhada.
+
+Estrutura do Output (JSON rigoroso):
 
 {
   "empresa": {
@@ -234,7 +348,7 @@ Estrutura do Output (Siga rigorosamente em formato JSON):
     "endereco": "string",
     "telefone": "string",
     "redes_sociais": "string",
-    "reputacao": "string (inclua dados do Reclame Aqui se disponíveis: nota, reclamações, taxa de resolução)",
+    "reputacao": "string (inclua dados do Reclame Aqui se disponíveis)",
     "atividade_principal": "string"
   },
   "socio_principal": {
@@ -242,37 +356,17 @@ Estrutura do Output (Siga rigorosamente em formato JSON):
     "cargo": "string",
     "formacao_academica": "string",
     "historico_profissional": "string",
-    "linkedin": "string (URL real do LinkedIn se encontrado nos dados externos)",
+    "linkedin": "string (URL real se encontrada)",
     "background_provavel": "string"
   },
   "mapeamento_socios": [
-    {
-      "nome": "string",
-      "cargo": "string",
-      "background_provavel": "string (Ex: Perfil Jurídico, Perfil Comercial, Perfil Operacional, Perfil Contábil)"
-    }
+    { "nome": "string", "cargo": "string", "background_provavel": "string" }
   ],
   "fontes_externas": {
-    "reclame_aqui": {
-      "encontrado": true/false,
-      "resumo": "string (resumo de reputação, nota, reclamações principais)",
-      "url": "string"
-    },
-    "processos_judiciais": {
-      "encontrado": true/false,
-      "resumo": "string (resumo dos processos encontrados no JusBrasil/Escavador)",
-      "url": "string"
-    },
-    "linkedin": {
-      "encontrado": true/false,
-      "resumo": "string (resumo do perfil da empresa no LinkedIn)",
-      "url": "string"
-    },
-    "noticias": {
-      "encontrado": true/false,
-      "resumo": "string (resumo das notícias recentes encontradas)",
-      "urls": ["string"]
-    }
+    "reclame_aqui": { "encontrado": true, "resumo": "string", "url": "string" },
+    "processos_judiciais": { "encontrado": true, "resumo": "string", "url": "string" },
+    "linkedin": { "encontrado": true, "resumo": "string", "url": "string" },
+    "noticias": { "encontrado": true, "resumo": "string", "urls": ["string"] }
   },
   "insights_estrategicos": {
     "janela_oportunidade": "string",
@@ -287,16 +381,14 @@ Estrutura do Output (Siga rigorosamente em formato JSON):
     "o_que_evitar": "string"
   },
   "logica_group_software": {
+    "analise_fit": "string",
+    "modulos_sugeridos": ["string"],
+    "gancho_venda": "string",
     "recomendacao_principal": "string",
     "produtos_sugeridos": ["string"],
     "justificativa": "string"
   }
 }
-
-Lógica de Negócio (Contexto Group Software): Lembre-se que o objetivo final é vender os serviços da Group Software, o PartnerBank e a Conta Digital. Cruze os dados encontrados com os benefícios dessas ferramentas:
-- Empresa nova = Foco em estruturação e PartnerBank para cobrança profissional.
-- Sócio Advogado = Foco em Compliance, Assembleia Digital e Segurança Jurídica.
-- Muitos sócios = Foco em gestão de processos e produtividade da equipe.
 
 IMPORTANTE: Responda SOMENTE com o JSON válido, sem markdown, sem backticks, sem texto adicional.`;
 
@@ -434,12 +526,16 @@ serve(async (req) => {
       );
     }
 
-    // 1. Fetch CNPJ data from BrasilAPI
+    // ==================== CASCADE LOGIC ====================
+    // For "nome" inputs: try LinkedIn search → find company → extract CNPJ
     let cnpjContext = "";
     let cnpjDataFound = false;
     let empresaNome = "";
-    const cnpj = extractCnpj(input, input_type);
+    let cascadeContext = "";
+    let cnpj = extractCnpj(input as string, input_type as string);
+
     if (cnpj) {
+      // Direct CNPJ input
       console.log(`Fetching CNPJ data for: ${cnpj}`);
       const cnpjData = await fetchCnpjData(cnpj);
       if (cnpjData) {
@@ -448,11 +544,86 @@ serve(async (req) => {
         empresaNome = (cnpjData.razao_social as string) || (cnpjData.nome_fantasia as string) || "";
         console.log("Successfully fetched CNPJ data from BrasilAPI");
       }
+    } else if (input_type === "nome") {
+      // CASCADE: Nome → LinkedIn → Empresa → CNPJ
+      console.log(`[Cascade] Starting name-based cascade for: "${input}"`);
+      
+      // Step 1: Search LinkedIn for the person
+      const linkedinSearch = await firecrawlSearch(
+        `"${input}" site:linkedin.com/in`, "cascade_linkedin", { limit: 3, lang: "pt-br", country: "br" }
+      );
+      
+      let companyFromLinkedin = "";
+      if (linkedinSearch.results.length > 0) {
+        // Extract company info from LinkedIn results
+        const linkedinContent = linkedinSearch.results
+          .map(r => `${r.title || ""} ${r.description || ""} ${r.markdown?.slice(0, 500) || ""}`)
+          .join(" ");
+        cascadeContext += `\n=== LINKEDIN DO SÓCIO (Cascade) ===\n${linkedinContent.slice(0, 2000)}\n`;
+        console.log(`[Cascade] LinkedIn found ${linkedinSearch.results.length} results`);
+
+        // Try to extract company name from LinkedIn result using simple patterns
+        const companyPatterns = [
+          /(?:at|na|em|@)\s+([A-ZÀ-Ú][A-Za-zÀ-ú\s&.,-]+(?:Ltda|S\.?A\.?|EIRELI|ME|EPP|Administradora|Imobiliária|Imóveis|Gestão|Condomín)[\w.]*)/i,
+          /(?:Gerente|Diretor|Sócio|CEO|Fundador|Proprietário|Administrador)(?:\s+\w+)?\s+(?:at|na|em|-|–|·)\s+([A-ZÀ-Ú][A-Za-zÀ-ú\s&.,-]+)/i,
+        ];
+        for (const pattern of companyPatterns) {
+          const match = linkedinContent.match(pattern);
+          if (match?.[1]) {
+            companyFromLinkedin = match[1].trim();
+            break;
+          }
+        }
+        // Fallback: use title fragments
+        if (!companyFromLinkedin) {
+          for (const r of linkedinSearch.results) {
+            const titleParts = (r.title || "").split(/\s*[-–·|]\s*/);
+            if (titleParts.length >= 2) {
+              companyFromLinkedin = titleParts[titleParts.length - 1].replace(/\s*\|?\s*LinkedIn\s*$/i, "").trim();
+              if (companyFromLinkedin.length > 3) break;
+            }
+          }
+        }
+      }
+
+      if (companyFromLinkedin) {
+        console.log(`[Cascade] Company extracted from LinkedIn: "${companyFromLinkedin}"`);
+        empresaNome = companyFromLinkedin;
+
+        // Step 2: Search for CNPJ of the company
+        const cnpjSearch = await firecrawlSearch(
+          `"${companyFromLinkedin}" CNPJ site:cnpj.biz OR site:casadosdados.com.br OR site:cnpja.com`,
+          "cascade_cnpj", { limit: 3 }
+        );
+
+        if (cnpjSearch.results.length > 0) {
+          const cnpjContent = cnpjSearch.results.map(r => `${r.title} ${r.description} ${r.markdown?.slice(0, 300)}`).join(" ");
+          const cnpjMatch = cnpjContent.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
+          if (cnpjMatch) {
+            cnpj = cnpjMatch[0];
+            console.log(`[Cascade] CNPJ found: ${cnpj}`);
+            const cnpjData = await fetchCnpjData(cnpj);
+            if (cnpjData) {
+              cnpjContext = formatCnpjContext(cnpjData);
+              cnpjDataFound = true;
+              empresaNome = (cnpjData.razao_social as string) || (cnpjData.nome_fantasia as string) || empresaNome;
+              console.log(`[Cascade] Full CNPJ data fetched for: ${empresaNome}`);
+            }
+          }
+        }
+        cascadeContext += `\nEmpresa identificada via LinkedIn: ${empresaNome}${cnpj ? ` (CNPJ: ${cnpj})` : ""}`;
+      } else {
+        console.log(`[Cascade] Could not extract company from LinkedIn, using name as-is`);
+        empresaNome = input as string;
+      }
     }
 
-    // Use input as company name if no CNPJ data
-    if (!empresaNome && input_type === "nome") {
-      empresaNome = input;
+    // Use input as company name if still empty
+    if (!empresaNome && input_type === "email") {
+      empresaNome = (input as string).split("@")[1]?.split(".")[0] || (input as string);
+    }
+    if (!empresaNome) {
+      empresaNome = input as string;
     }
 
     // 2. Fetch external sources in parallel via Firecrawl
@@ -466,8 +637,11 @@ serve(async (req) => {
     const userMessage = `Gere o dossiê completo para o seguinte lead:
 Tipo de input: ${input_type}
 Dado fornecido: ${input}
+${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa → CNPJ) ===${cascadeContext}\n=== FIM CASCATA ===` : ""}
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
-${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê com informações reais de reputação, processos judiciais, perfil LinkedIn e notícias.` : ""}
+${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê.` : ""}
+
+LEMBRETE: Na seção "logica_group_software", use ESTRITAMENTE os produtos dos catálogos Group Software e PartnerBank fornecidos no system prompt. Inclua "analise_fit", "modulos_sugeridos" (nomes exatos dos sites), e "gancho_venda" (copy do site).
 
 Analise profundamente e retorne o JSON estruturado conforme o formato especificado.`;
 
