@@ -418,6 +418,9 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       );
     }
 
+    // Calculate lead qualification score
+    const lead_score = calculateLeadScore(dossier, cnpjDataFound, externalResults);
+
     // Build data_sources metadata
     const data_sources = {
       receita_federal: cnpjDataFound,
@@ -435,7 +438,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
     };
 
     return new Response(
-      JSON.stringify({ success: true, dossier, data_sources }),
+      JSON.stringify({ success: true, dossier, data_sources, lead_score }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
