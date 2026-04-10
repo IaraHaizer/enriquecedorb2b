@@ -17,7 +17,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { NavLink } from "@/components/NavLink";
+import { AppNavLink } from "@/components/AppNavLink";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchHistory, type DossierHistoryItem, type Dossier } from "@/lib/dossier-api";
 import { useNavigate } from "react-router-dom";
