@@ -1,7 +1,8 @@
 import {
   Building2, UserCircle, Users, Target, Lightbulb, ShieldAlert,
   MapPin, Phone, Globe, Award, Briefcase, GraduationCap, Linkedin,
-  MessageSquare, AlertTriangle, Package, Database, Sparkles
+  MessageSquare, AlertTriangle, Package, Database, Sparkles,
+  Search, Scale, Newspaper, ExternalLink
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,33 +17,24 @@ interface DossierDisplayProps {
   dataSources?: DataSources | null;
 }
 
-function SourceBadge({ source }: { source: "receita" | "ia" }) {
-  if (source === "receita") {
-    return (
-      <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] px-1.5 py-0 font-normal gap-1">
-        <Database className="h-2.5 w-2.5" />
-        Receita Federal
-      </Badge>
-    );
-  }
+function SourceBadge({ source }: { source: "receita" | "ia" | "firecrawl" | "reclame_aqui" | "jusbrasil" | "linkedin" | "noticias" }) {
+  const configs: Record<string, { bg: string; text: string; border: string; icon: typeof Database; label: string }> = {
+    receita: { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30", icon: Database, label: "Receita Federal" },
+    ia: { bg: "bg-violet-500/15", text: "text-violet-400", border: "border-violet-500/30", icon: Sparkles, label: "Análise IA" },
+    firecrawl: { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/30", icon: Search, label: "Firecrawl" },
+    reclame_aqui: { bg: "bg-red-500/15", text: "text-red-400", border: "border-red-500/30", icon: MessageSquare, label: "Reclame Aqui" },
+    jusbrasil: { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/30", icon: Scale, label: "JusBrasil" },
+    linkedin: { bg: "bg-sky-500/15", text: "text-sky-400", border: "border-sky-500/30", icon: Linkedin, label: "LinkedIn" },
+    noticias: { bg: "bg-amber-500/15", text: "text-amber-400", border: "border-amber-500/30", icon: Newspaper, label: "Notícias" },
+  };
+  const c = configs[source] || configs.ia;
+  const Icon = c.icon;
   return (
-    <Badge className="bg-violet-500/15 text-violet-400 border-violet-500/30 text-[10px] px-1.5 py-0 font-normal gap-1">
-      <Sparkles className="h-2.5 w-2.5" />
-      Análise IA
+    <Badge className={`${c.bg} ${c.text} ${c.border} text-[10px] px-1.5 py-0 font-normal gap-1`}>
+      <Icon className="h-2.5 w-2.5" />
+      {c.label}
     </Badge>
   );
-}
-
-function SectionSourceBadge({ source }: { source: "receita" | "ia" | "mixed" }) {
-  if (source === "mixed") {
-    return (
-      <div className="flex gap-1.5">
-        <SourceBadge source="receita" />
-        <SourceBadge source="ia" />
-      </div>
-    );
-  }
-  return <SourceBadge source={source} />;
 }
 
 function SectionCard({
@@ -62,7 +54,11 @@ function SectionCard({
             <Icon className="h-5 w-5 text-primary" />
             {title}
           </CardTitle>
-          {source && <SectionSourceBadge source={source} />}
+          {source && (
+            source === "mixed" ? (
+              <div className="flex gap-1.5"><SourceBadge source="receita" /><SourceBadge source="ia" /></div>
+            ) : <SourceBadge source={source} />
+          )}
         </div>
       </CardHeader>
       <CardContent>{children}</CardContent>
@@ -85,7 +81,6 @@ function InfoRow({ label, value, icon: Icon, source }: { label: string; value: s
   );
 }
 
-// Map field names to their data source
 function getFieldSource(fieldName: string, dataSources: DataSources | null | undefined): "receita" | "ia" | undefined {
   if (!dataSources) return undefined;
   if (dataSources.campos_receita.includes(fieldName)) return "receita";
@@ -103,10 +98,44 @@ function getSectionSource(sectionFields: string[], dataSources: DataSources | nu
   return undefined;
 }
 
+function FonteExternaCard({ title, icon: Icon, fonte, badgeSource }: {
+  title: string;
+  icon: typeof MessageSquare;
+  fonte?: { encontrado: boolean; resumo: string; url?: string; urls?: string[] };
+  badgeSource: "reclame_aqui" | "jusbrasil" | "linkedin" | "noticias";
+}) {
+  if (!fonte || !fonte.encontrado) return null;
+  const urls = fonte.urls || (fonte.url ? [fonte.url] : []);
+
+  return (
+    <div className="rounded-lg border border-border/50 p-4 space-y-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Icon className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium">{title}</span>
+        </div>
+        <SourceBadge source={badgeSource} />
+      </div>
+      <p className="text-sm text-muted-foreground">{fonte.resumo}</p>
+      {urls.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {urls.slice(0, 3).map((url, i) => (
+            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline flex items-center gap-1">
+              <ExternalLink className="h-3 w-3" /> Fonte {urls.length > 1 ? i + 1 : ""}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DossierDisplay({ dossier, dataSources }: DossierDisplayProps) {
   const empresa = dossier.empresa || {} as Dossier["empresa"];
   const socio_principal = dossier.socio_principal || {} as Dossier["socio_principal"];
   const mapeamento_socios = dossier.mapeamento_socios || [];
+  const fontes_externas = dossier.fontes_externas;
   const insights_estrategicos = dossier.insights_estrategicos || {} as Dossier["insights_estrategicos"];
   const logica_group_software = dossier.logica_group_software || {} as Dossier["logica_group_software"];
 
@@ -120,6 +149,14 @@ export function DossierDisplay({ dossier, dataSources }: DossierDisplayProps) {
   );
   const sociosMapSource = dataSources?.campos_receita.includes("mapeamento_socios") ? "receita" as const : dataSources ? "ia" as const : undefined;
 
+  const hasExternalSources = dataSources?.fontes_externas && dataSources.fontes_externas.length > 0;
+  const hasFonteExternaData = fontes_externas && (
+    fontes_externas.reclame_aqui?.encontrado ||
+    fontes_externas.processos_judiciais?.encontrado ||
+    fontes_externas.linkedin?.encontrado ||
+    fontes_externas.noticias?.encontrado
+  );
+
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6 mt-8">
       {/* Data source legend */}
@@ -130,8 +167,36 @@ export function DossierDisplay({ dossier, dataSources }: DossierDisplayProps) {
               <span className="font-medium">Fontes dos dados:</span>
               <div className="flex items-center gap-1.5">
                 <SourceBadge source="receita" />
-                <span>Dados oficiais da Receita Federal via BrasilAPI</span>
+                <span>Receita Federal (BrasilAPI)</span>
               </div>
+              {hasExternalSources && (
+                <>
+                  {dataSources.fontes_externas!.includes("reclame_aqui") && (
+                    <div className="flex items-center gap-1.5">
+                      <SourceBadge source="reclame_aqui" />
+                      <span>Firecrawl Search</span>
+                    </div>
+                  )}
+                  {dataSources.fontes_externas!.includes("jusbrasil_escavador") && (
+                    <div className="flex items-center gap-1.5">
+                      <SourceBadge source="jusbrasil" />
+                      <span>Firecrawl Search</span>
+                    </div>
+                  )}
+                  {dataSources.fontes_externas!.includes("linkedin") && (
+                    <div className="flex items-center gap-1.5">
+                      <SourceBadge source="linkedin" />
+                      <span>Firecrawl Search</span>
+                    </div>
+                  )}
+                  {dataSources.fontes_externas!.includes("google_news") && (
+                    <div className="flex items-center gap-1.5">
+                      <SourceBadge source="noticias" />
+                      <span>Firecrawl Search</span>
+                    </div>
+                  )}
+                </>
+              )}
               <div className="flex items-center gap-1.5">
                 <SourceBadge source="ia" />
                 <span>Análise e enriquecimento por IA</span>
@@ -167,6 +232,18 @@ export function DossierDisplay({ dossier, dataSources }: DossierDisplayProps) {
           <InfoRow label="Reputação" value={empresa.reputacao} icon={Award} source={getFieldSource("reputacao", dataSources)} />
         </div>
       </SectionCard>
+
+      {/* Fontes Externas */}
+      {hasFonteExternaData && (
+        <SectionCard icon={Search} title="Inteligência de Fontes Externas" accent>
+          <div className="grid md:grid-cols-2 gap-4">
+            <FonteExternaCard title="Reclame Aqui" icon={MessageSquare} fonte={fontes_externas?.reclame_aqui} badgeSource="reclame_aqui" />
+            <FonteExternaCard title="Processos Judiciais" icon={Scale} fonte={fontes_externas?.processos_judiciais} badgeSource="jusbrasil" />
+            <FonteExternaCard title="LinkedIn" icon={Linkedin} fonte={fontes_externas?.linkedin} badgeSource="linkedin" />
+            <FonteExternaCard title="Notícias Recentes" icon={Newspaper} fonte={fontes_externas?.noticias} badgeSource="noticias" />
+          </div>
+        </SectionCard>
+      )}
 
       {/* Sócio Principal */}
       <SectionCard icon={UserCircle} title="Perfil do Sócio Principal" accent source={socioSource}>
@@ -207,9 +284,7 @@ export function DossierDisplay({ dossier, dataSources }: DossierDisplayProps) {
                 <TableRow key={i}>
                   <TableCell className="font-medium">{s.nome}</TableCell>
                   <TableCell>{s.cargo}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{s.background_provavel}</Badge>
-                  </TableCell>
+                  <TableCell><Badge variant="outline">{s.background_provavel}</Badge></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -226,9 +301,7 @@ export function DossierDisplay({ dossier, dataSources }: DossierDisplayProps) {
             </span>
             <p className="text-sm mt-1">{insights_estrategicos.janela_oportunidade}</p>
           </div>
-
           <Separator />
-
           <div className="grid md:grid-cols-3 gap-4">
             <div>
               <span className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
@@ -245,14 +318,10 @@ export function DossierDisplay({ dossier, dataSources }: DossierDisplayProps) {
               <p className="text-sm mt-1 font-medium">{insights_estrategicos.abordagem_personalizada?.argumento_central}</p>
             </div>
           </div>
-
           <Separator />
-
           {(insights_estrategicos.ressonancia_por_perfil?.length ?? 0) > 0 && (
             <div>
-              <span className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
-                Ressonância por Perfil
-              </span>
+              <span className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Ressonância por Perfil</span>
               <div className="space-y-2">
                 {insights_estrategicos.ressonancia_por_perfil.map((r, i) => (
                   <div key={i} className="flex items-start gap-2 bg-secondary/50 rounded-md p-3">
@@ -266,9 +335,7 @@ export function DossierDisplay({ dossier, dataSources }: DossierDisplayProps) {
               </div>
             </div>
           )}
-
           <Separator />
-
           <div>
             <span className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" /> O que Evitar
@@ -285,23 +352,18 @@ export function DossierDisplay({ dossier, dataSources }: DossierDisplayProps) {
             <span className="text-xs text-muted-foreground uppercase tracking-wider">Recomendação Principal</span>
             <p className="text-sm mt-1 font-medium">{logica_group_software.recomendacao_principal}</p>
           </div>
-
           {(logica_group_software.produtos_sugeridos?.length ?? 0) > 0 && (
             <div>
-              <span className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
-                Produtos Sugeridos
-              </span>
+              <span className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Produtos Sugeridos</span>
               <div className="flex flex-wrap gap-2">
                 {logica_group_software.produtos_sugeridos.map((p, i) => (
                   <Badge key={i} className="bg-primary/10 text-primary border-primary/20">
-                    <Package className="h-3 w-3 mr-1" />
-                    {p}
+                    <Package className="h-3 w-3 mr-1" />{p}
                   </Badge>
                 ))}
               </div>
             </div>
           )}
-
           <div>
             <span className="text-xs text-muted-foreground uppercase tracking-wider">Justificativa</span>
             <p className="text-sm mt-1">{logica_group_software.justificativa}</p>

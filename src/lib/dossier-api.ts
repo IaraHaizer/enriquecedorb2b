@@ -8,6 +8,20 @@ export interface Socio {
   background_provavel: string;
 }
 
+export interface FonteExterna {
+  encontrado: boolean;
+  resumo: string;
+  url?: string;
+  urls?: string[];
+}
+
+export interface FontesExternas {
+  reclame_aqui?: FonteExterna;
+  processos_judiciais?: FonteExterna;
+  linkedin?: FonteExterna;
+  noticias?: FonteExterna;
+}
+
 export interface Dossier {
   empresa: {
     nome: string;
@@ -31,6 +45,7 @@ export interface Dossier {
     background_provavel: string;
   };
   mapeamento_socios: Socio[];
+  fontes_externas?: FontesExternas;
   insights_estrategicos: {
     janela_oportunidade: string;
     abordagem_personalizada: {
@@ -51,10 +66,19 @@ export interface Dossier {
   };
 }
 
+export interface FirecrawlDetail {
+  source: string;
+  found: boolean;
+  count: number;
+  error: string | null;
+}
+
 export interface DataSources {
   receita_federal: boolean;
   campos_receita: string[];
   campos_ia: string[];
+  fontes_externas?: string[];
+  firecrawl_details?: FirecrawlDetail[];
 }
 
 export interface DossierResult {
@@ -86,7 +110,7 @@ export async function generateDossier(input: string, inputType: InputType): Prom
   }
 
   const dossier = data.dossier as Dossier;
-  const data_sources = (data.data_sources || { receita_federal: false, campos_receita: [], campos_ia: [] }) as DataSources;
+  const data_sources = (data.data_sources || { receita_federal: false, campos_receita: [], campos_ia: [], fontes_externas: [], firecrawl_details: [] }) as DataSources;
 
   // Save to history
   await supabase.from("dossier_history").insert([{
