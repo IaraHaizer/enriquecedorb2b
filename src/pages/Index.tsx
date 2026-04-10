@@ -3,13 +3,14 @@ import { DossierForm } from "@/components/DossierForm";
 import { DossierDisplay } from "@/components/DossierDisplay";
 import { DossierHistory } from "@/components/DossierHistory";
 import { toast } from "sonner";
-import { generateDossier, type Dossier, type InputType } from "@/lib/dossier-api";
+import { generateDossier, type Dossier, type DataSources, type InputType } from "@/lib/dossier-api";
 import { Crosshair, RotateCcw, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Index() {
   const [dossier, setDossier] = useState<Dossier | null>(null);
+  const [dataSources, setDataSources] = useState<DataSources | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   
@@ -18,10 +19,12 @@ export default function Index() {
   const handleSubmit = async (input: string, inputType: InputType) => {
     setIsLoading(true);
     setDossier(null);
+    setDataSources(null);
 
     try {
       const result = await generateDossier(input, inputType);
-      setDossier(result);
+      setDossier(result.dossier);
+      setDataSources(result.data_sources);
       setRefreshKey((k) => k + 1);
       toast.success(`Dossiê gerado com sucesso! Lead: ${input}`);
     } catch (error) {
@@ -33,7 +36,13 @@ export default function Index() {
 
   const handleSelectFromHistory = (d: Dossier) => {
     setDossier(d);
+    setDataSources(null); // History items don't have data_sources
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleNewSearch = () => {
+    setDossier(null);
+    setDataSources(null);
   };
 
   return (
@@ -51,7 +60,7 @@ export default function Index() {
           </div>
           <div className="flex items-center gap-2">
             {dossier && (
-              <Button variant="ghost" size="sm" onClick={() => setDossier(null)} className="text-muted-foreground">
+              <Button variant="ghost" size="sm" onClick={handleNewSearch} className="text-muted-foreground">
                 <RotateCcw className="h-4 w-4 mr-1" /> Nova Pesquisa
               </Button>
             )}
@@ -64,7 +73,6 @@ export default function Index() {
 
       <main className="container max-w-6xl mx-auto px-4 py-12">
         <div className="grid lg:grid-cols-[1fr_320px] gap-8">
-          {/* Main content */}
           <div>
             {!dossier && !isLoading && (
               <div className="text-center mb-10">
@@ -88,10 +96,9 @@ export default function Index() {
               </div>
             )}
 
-            {dossier && <DossierDisplay dossier={dossier} />}
+            {dossier && <DossierDisplay dossier={dossier} dataSources={dataSources} />}
           </div>
 
-          {/* Sidebar - History */}
           <aside className="order-first lg:order-last">
             <DossierHistory onSelect={handleSelectFromHistory} refreshKey={refreshKey} />
           </aside>

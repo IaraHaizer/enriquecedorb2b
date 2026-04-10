@@ -51,6 +51,17 @@ export interface Dossier {
   };
 }
 
+export interface DataSources {
+  receita_federal: boolean;
+  campos_receita: string[];
+  campos_ia: string[];
+}
+
+export interface DossierResult {
+  dossier: Dossier;
+  data_sources: DataSources;
+}
+
 export interface DossierHistoryItem {
   id: string;
   input: string;
@@ -61,7 +72,7 @@ export interface DossierHistoryItem {
   dossier_data: Dossier;
 }
 
-export async function generateDossier(input: string, inputType: InputType): Promise<Dossier> {
+export async function generateDossier(input: string, inputType: InputType): Promise<DossierResult> {
   const { data, error } = await supabase.functions.invoke("generate-dossier", {
     body: { input, input_type: inputType },
   });
@@ -75,6 +86,7 @@ export async function generateDossier(input: string, inputType: InputType): Prom
   }
 
   const dossier = data.dossier as Dossier;
+  const data_sources = (data.data_sources || { receita_federal: false, campos_receita: [], campos_ia: [] }) as DataSources;
 
   // Save to history
   await supabase.from("dossier_history").insert([{
@@ -85,7 +97,7 @@ export async function generateDossier(input: string, inputType: InputType): Prom
     dossier_data: JSON.parse(JSON.stringify(dossier)),
   }]);
 
-  return dossier;
+  return { dossier, data_sources };
 }
 
 export async function fetchHistory(): Promise<DossierHistoryItem[]> {

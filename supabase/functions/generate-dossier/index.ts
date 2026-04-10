@@ -156,12 +156,14 @@ serve(async (req) => {
 
     // Try to fetch real CNPJ data from BrasilAPI
     let cnpjContext = "";
+    let cnpjDataFound = false;
     const cnpj = extractCnpj(input, input_type);
     if (cnpj) {
       console.log(`Fetching CNPJ data for: ${cnpj}`);
       const cnpjData = await fetchCnpjData(cnpj);
       if (cnpjData) {
         cnpjContext = formatCnpjContext(cnpjData);
+        cnpjDataFound = true;
         console.log("Successfully fetched CNPJ data from BrasilAPI");
       } else {
         console.log("Could not fetch CNPJ data, proceeding with AI only");
@@ -233,8 +235,17 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       );
     }
 
+    // Build data_sources metadata
+    const data_sources = {
+      receita_federal: cnpjDataFound,
+      campos_receita: cnpjDataFound
+        ? ["nome", "cnpj", "situacao", "abertura", "porte", "capital_social", "endereco", "telefone", "atividade_principal", "mapeamento_socios"]
+        : [],
+      campos_ia: ["redes_sociais", "reputacao", "formacao_academica", "historico_profissional", "linkedin", "background_provavel", "insights_estrategicos", "logica_group_software"],
+    };
+
     return new Response(
-      JSON.stringify({ success: true, dossier }),
+      JSON.stringify({ success: true, dossier, data_sources }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
