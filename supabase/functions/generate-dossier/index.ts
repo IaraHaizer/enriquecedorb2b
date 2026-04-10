@@ -156,12 +156,14 @@ serve(async (req) => {
 
     // Try to fetch real CNPJ data from BrasilAPI
     let cnpjContext = "";
+    let cnpjDataFound = false;
     const cnpj = extractCnpj(input, input_type);
     if (cnpj) {
       console.log(`Fetching CNPJ data for: ${cnpj}`);
       const cnpjData = await fetchCnpjData(cnpj);
       if (cnpjData) {
         cnpjContext = formatCnpjContext(cnpjData);
+        cnpjDataFound = true;
         console.log("Successfully fetched CNPJ data from BrasilAPI");
       } else {
         console.log("Could not fetch CNPJ data, proceeding with AI only");
