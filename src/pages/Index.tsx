@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { DossierForm } from "@/components/DossierForm";
 import { DossierDisplay } from "@/components/DossierDisplay";
 import { DossierHistory } from "@/components/DossierHistory";
