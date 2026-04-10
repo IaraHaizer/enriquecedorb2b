@@ -839,6 +839,7 @@ serve(async (req) => {
             cnpj = cnpjMatch[0];
             console.log(`[Cascade] CNPJ found: ${cnpj}`);
             const cnpjData = await fetchCnpjData(cnpj);
+            cnpjDataRef = cnpjData;
             if (cnpjData) {
               cnpjContext = formatCnpjContext(cnpjData);
               cnpjDataFound = true;
