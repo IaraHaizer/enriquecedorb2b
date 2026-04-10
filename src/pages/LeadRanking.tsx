@@ -4,7 +4,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Trophy, ArrowUpDown, ArrowUp, ArrowDown, Download, Search, Filter,
   Building2, Hash, Mail, User, Flame, Thermometer, Snowflake, Eye,
-  LogOut, Crosshair, BarChart3,
+  LogOut, Crosshair, BarChart3, History,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -167,6 +167,7 @@ export default function LeadRanking() {
           <div className="flex items-center gap-2">
             <AppNavLink to="/" icon={Search} label="Pesquisa" />
             <AppNavLink to="/ranking" icon={BarChart3} label="Ranking" active />
+            <AppNavLink to="/historico" icon={History} label="Histórico" />
             <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground">
               <LogOut className="h-4 w-4 mr-1" /> Sair
             </Button>
