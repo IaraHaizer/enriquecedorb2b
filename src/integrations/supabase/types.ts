@@ -44,6 +44,39 @@ export type Database = {
         }
         Relationships: []
       }
+      firecrawl_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          error: string | null
+          expires_at: string
+          id: string
+          query: string
+          results: Json
+          source_name: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          error?: string | null
+          expires_at?: string
+          id?: string
+          query: string
+          results?: Json
+          source_name: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          error?: string | null
+          expires_at?: string
+          id?: string
+          query?: string
+          results?: Json
+          source_name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
