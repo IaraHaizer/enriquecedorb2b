@@ -406,7 +406,18 @@ serve(async (req) => {
   }
 
   try {
-    const { input, input_type, skip_cache } = await req.json();
+    const rawBody = await req.text();
+    let parsedBody: Record<string, unknown>;
+    try {
+      parsedBody = JSON.parse(rawBody);
+    } catch {
+      console.error("Failed to parse request body:", rawBody?.slice(0, 200));
+      return new Response(
+        JSON.stringify({ error: "Invalid request body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const { input, input_type, skip_cache } = parsedBody;
 
     if (!input || !input_type) {
       return new Response(
@@ -496,7 +507,17 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       );
     }
 
-    const aiData = await response.json();
+    const aiText = await response.text();
+    let aiData;
+    try {
+      aiData = JSON.parse(aiText);
+    } catch {
+      console.error("Failed to parse AI response:", aiText?.slice(0, 500));
+      return new Response(
+        JSON.stringify({ error: "Erro ao processar resposta da IA (parsing)" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     const content = aiData.choices?.[0]?.message?.content;
 
     if (!content) {
