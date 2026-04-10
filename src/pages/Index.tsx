@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { DossierForm } from "@/components/DossierForm";
 import { DossierDisplay } from "@/components/DossierDisplay";
-import { DossierHistory } from "@/components/DossierHistory";
+
 import { toast } from "sonner";
 import { generateDossier, type Dossier, type DataSources, type LeadScore, type InputType } from "@/lib/dossier-api";
 import { Crosshair, RotateCcw, LogOut, RefreshCw, Search, BarChart3, History } from "lucide-react";
@@ -57,12 +57,6 @@ export default function Index() {
     }
   };
 
-  const handleSelectFromHistory = (d: Dossier) => {
-    setDossier(d);
-    setDataSources(null);
-    setLeadScore(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
 
   const handleNewSearch = () => {
     setDossier(null);
@@ -104,38 +98,30 @@ export default function Index() {
         </div>
       </header>
 
-      <main className="container max-w-6xl mx-auto px-4 py-12">
-        <div className="grid lg:grid-cols-[1fr_320px] gap-8">
-          <div>
-            {!dossier && !isLoading && (
-              <div className="text-center mb-10">
-                <h2 className="text-3xl font-heading font-bold mb-3">Dossiê Estratégico de Leads</h2>
-                <p className="text-muted-foreground max-w-lg mx-auto">
-                  Insira um CNPJ, e-mail ou nome para gerar um dossiê completo com insights
-                  de pré-vendas focados em Administradoras de Condomínios e Imobiliárias.
-                </p>
-              </div>
-            )}
-
-            {!dossier && <DossierForm onSubmit={handleSubmit} isLoading={isLoading} />}
-
-            {isLoading && (
-              <div className="text-center mt-16 space-y-4">
-                <div className="h-12 w-12 mx-auto border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-                <div>
-                  <p className="font-heading font-medium">Analisando lead...</p>
-                  <p className="text-sm text-muted-foreground">Isso pode levar alguns segundos</p>
-                </div>
-              </div>
-            )}
-
-            {dossier && <DossierDisplay dossier={dossier} dataSources={dataSources} leadScore={leadScore} />}
+      <main className="container max-w-4xl mx-auto px-4 py-12">
+        {!dossier && !isLoading && (
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-heading font-bold mb-3">Dossiê Estratégico de Leads</h2>
+            <p className="text-muted-foreground max-w-lg mx-auto">
+              Insira um CNPJ, e-mail ou nome para gerar um dossiê completo com insights
+              de pré-vendas focados em Administradoras de Condomínios e Imobiliárias.
+            </p>
           </div>
+        )}
 
-          <aside className="order-first lg:order-last">
-            <DossierHistory onSelect={handleSelectFromHistory} refreshKey={refreshKey} />
-          </aside>
-        </div>
+        {!dossier && <DossierForm onSubmit={handleSubmit} isLoading={isLoading} />}
+
+        {isLoading && (
+          <div className="text-center mt-16 space-y-4">
+            <div className="h-12 w-12 mx-auto border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <div>
+              <p className="font-heading font-medium">Analisando lead...</p>
+              <p className="text-sm text-muted-foreground">Isso pode levar alguns segundos</p>
+            </div>
+          </div>
+        )}
+
+        {dossier && <DossierDisplay dossier={dossier} dataSources={dataSources} leadScore={leadScore} />}
       </main>
     </div>
   );
