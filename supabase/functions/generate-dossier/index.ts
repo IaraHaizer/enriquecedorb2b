@@ -659,12 +659,17 @@ function calculateLeadScore(
   else if (socios.length >= 1) societaria += 4;
   breakdown.push({ categoria: "Estrutura Societária", pontos: societaria, max: 10, detalhe: `${socios.length} sócio(s) mapeado(s)` });
 
-  // 4. Presença digital (0-15)
+  // 4. Presença digital (0-15) — now includes domain data
   let digital = 0;
-  if (socio.linkedin && socio.linkedin !== "Não identificado") digital += 5;
-  if (empresa.redes_sociais && empresa.redes_sociais !== "Não identificado") digital += 5;
-  if (fontes.linkedin?.encontrado) digital += 5;
-  breakdown.push({ categoria: "Presença Digital", pontos: digital, max: 15, detalhe: digital >= 10 ? "Boa presença online" : "Presença limitada" });
+  if (socio.linkedin && socio.linkedin !== "Não identificado") digital += 3;
+  if (empresa.redes_sociais && empresa.redes_sociais !== "Não identificado") digital += 3;
+  if (fontes.linkedin?.encontrado) digital += 3;
+  const dominios = (dossier.dominios_associados || []) as Array<Record<string, string>>;
+  if (dominios.length > 0) digital += 3; // has registered domains
+  if (dominios.length >= 2) digital += 3; // multiple domains
+  digital = Math.min(15, digital);
+  const domainNames = dominios.map(d => d.dominio).filter(Boolean).join(", ");
+  breakdown.push({ categoria: "Presença Digital", pontos: digital, max: 15, detalhe: dominios.length > 0 ? `${dominios.length} domínio(s): ${domainNames.slice(0, 60)}` : (digital >= 10 ? "Boa presença online" : "Presença limitada") });
 
   // 5. Reputação e riscos (0-15)
   let reputacao = 8;
