@@ -3,7 +3,7 @@ import { DossierForm } from "@/components/DossierForm";
 import { DossierDisplay } from "@/components/DossierDisplay";
 import { DossierHistory } from "@/components/DossierHistory";
 import { toast } from "sonner";
-import { generateDossier, type Dossier, type DataSources, type InputType } from "@/lib/dossier-api";
+import { generateDossier, type Dossier, type DataSources, type LeadScore, type InputType } from "@/lib/dossier-api";
 import { Crosshair, RotateCcw, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 export default function Index() {
   const [dossier, setDossier] = useState<Dossier | null>(null);
   const [dataSources, setDataSources] = useState<DataSources | null>(null);
+  const [leadScore, setLeadScore] = useState<LeadScore | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   
@@ -20,11 +21,13 @@ export default function Index() {
     setIsLoading(true);
     setDossier(null);
     setDataSources(null);
+    setLeadScore(null);
 
     try {
       const result = await generateDossier(input, inputType);
       setDossier(result.dossier);
       setDataSources(result.data_sources);
+      setLeadScore(result.lead_score || null);
       setRefreshKey((k) => k + 1);
       toast.success(`Dossiê gerado com sucesso! Lead: ${input}`);
     } catch (error) {
@@ -36,13 +39,15 @@ export default function Index() {
 
   const handleSelectFromHistory = (d: Dossier) => {
     setDossier(d);
-    setDataSources(null); // History items don't have data_sources
+    setDataSources(null);
+    setLeadScore(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleNewSearch = () => {
     setDossier(null);
     setDataSources(null);
+    setLeadScore(null);
   };
 
   return (
@@ -96,7 +101,7 @@ export default function Index() {
               </div>
             )}
 
-            {dossier && <DossierDisplay dossier={dossier} dataSources={dataSources} />}
+            {dossier && <DossierDisplay dossier={dossier} dataSources={dataSources} leadScore={leadScore} />}
           </div>
 
           <aside className="order-first lg:order-last">
