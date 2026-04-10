@@ -132,27 +132,45 @@ function generateCandidateDomains(empresaNome: string, cnpjData: Record<string, 
     }
   }
 
-  // From company name - generate .com.br and .com.br variants
   const nomeFantasia = (cnpjData?.nome_fantasia as string) || "";
   const razaoSocial = (cnpjData?.razao_social as string) || empresaNome;
   
+  const normalize = (s: string) => s
+    .toLowerCase()
+    .replace(/[àáâãä]/g, "a").replace(/[èéêë]/g, "e").replace(/[ìíîï]/g, "i")
+    .replace(/[òóôõö]/g, "o").replace(/[ùúûü]/g, "u").replace(/[ç]/g, "c");
+
   for (const nome of [nomeFantasia, razaoSocial]) {
     if (!nome) continue;
-    const slug = nome
-      .toLowerCase()
-      .replace(/\s*(ltda|s\.?a\.?|eireli|me|epp|administradora|admin|de condomínios?|de imóveis|gestão|serviços?)\s*/gi, "")
-      .replace(/[àáâãä]/g, "a").replace(/[èéêë]/g, "e").replace(/[ìíîï]/g, "i")
-      .replace(/[òóôõö]/g, "o").replace(/[ùúûü]/g, "u").replace(/[ç]/g, "c")
-      .replace(/[^a-z0-9]/g, "")
-      .slice(0, 30);
-    if (slug.length >= 3) {
-      candidates.push(`${slug}.com.br`);
-      candidates.push(`${slug}.com`);
+    // Full slug (remove legal suffixes)
+    const cleaned = normalize(nome)
+      .replace(/\b(ltda|s[\.\s]*a|eireli|me|epp|administradora|admin|gestao|servicos?|comercio|industria|do brasil|brasileira?)\b/gi, "")
+      .trim();
+    const fullSlug = cleaned.replace(/[^a-z0-9]/g, "").slice(0, 30);
+    if (fullSlug.length >= 3) {
+      candidates.push(`${fullSlug}.com.br`);
+      candidates.push(`${fullSlug}.com`);
+    }
+    // First meaningful word (e.g. "Petrobras" from "Petroleo Brasileiro S.A. - Petrobras")
+    const words = cleaned.split(/[\s\-–]+/).filter(w => w.length >= 3 && w.replace(/[^a-z]/g, "").length >= 3);
+    for (const word of words) {
+      const w = word.replace(/[^a-z0-9]/g, "");
+      if (w.length >= 3 && w !== fullSlug) {
+        candidates.push(`${w}.com.br`);
+        candidates.push(`${w}.com`);
+      }
     }
   }
 
-  // Deduplicate
-  return [...new Set(candidates)].slice(0, 6);
+  // Also try the empresaNome directly if different
+  if (empresaNome && empresaNome !== razaoSocial && empresaNome !== nomeFantasia) {
+    const slug = normalize(empresaNome).replace(/[^a-z0-9]/g, "").slice(0, 30);
+    if (slug.length >= 3) {
+      candidates.push(`${slug}.com.br`);
+    }
+  }
+
+  return [...new Set(candidates)].slice(0, 8);
 }
 
 async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjData: Record<string, unknown> | null, skipCache = false): Promise<{ dominios: DominioInfo[]; firecrawlDomains: FirecrawlResult }> {
