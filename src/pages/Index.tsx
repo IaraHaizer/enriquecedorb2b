@@ -4,8 +4,9 @@ import { DossierDisplay } from "@/components/DossierDisplay";
 import { DossierHistory } from "@/components/DossierHistory";
 import { toast } from "sonner";
 import { generateDossier, type Dossier, type DataSources, type LeadScore, type InputType } from "@/lib/dossier-api";
-import { Crosshair, RotateCcw, LogOut, RefreshCw } from "lucide-react";
+import { Crosshair, RotateCcw, LogOut, RefreshCw, Search, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppNavLink } from "@/components/AppNavLink";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Index() {
