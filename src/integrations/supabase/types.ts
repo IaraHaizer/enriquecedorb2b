@@ -14,7 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      dossier_history: {
+        Row: {
+          created_at: string
+          dossier_data: Json
+          empresa_cnpj: string | null
+          empresa_nome: string | null
+          id: string
+          input: string
+          input_type: string
+        }
+        Insert: {
+          created_at?: string
+          dossier_data: Json
+          empresa_cnpj?: string | null
+          empresa_nome?: string | null
+          id?: string
+          input: string
+          input_type: string
+        }
+        Update: {
+          created_at?: string
+          dossier_data?: Json
+          empresa_cnpj?: string | null
+          empresa_nome?: string | null
+          id?: string
+          input?: string
+          input_type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

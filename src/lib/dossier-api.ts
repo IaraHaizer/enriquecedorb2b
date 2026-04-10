@@ -51,6 +51,16 @@ export interface Dossier {
   };
 }
 
+export interface DossierHistoryItem {
+  id: string;
+  input: string;
+  input_type: string;
+  empresa_nome: string | null;
+  empresa_cnpj: string | null;
+  created_at: string;
+  dossier_data: Dossier;
+}
+
 export async function generateDossier(input: string, inputType: InputType): Promise<Dossier> {
   const { data, error } = await supabase.functions.invoke("generate-dossier", {
     body: { input, input_type: inputType },
@@ -64,5 +74,27 @@ export async function generateDossier(input: string, inputType: InputType): Prom
     throw new Error(data?.error || "Erro desconhecido");
   }
 
-  return data.dossier as Dossier;
+  const dossier = data.dossier as Dossier;
+
+  // Save to history
+  await supabase.from("dossier_history").insert([{
+    input,
+    input_type: inputType,
+    empresa_nome: dossier.empresa?.nome || null,
+    empresa_cnpj: dossier.empresa?.cnpj || null,
+    dossier_data: JSON.parse(JSON.stringify(dossier)),
+  }]);
+
+  return dossier;
+}
+
+export async function fetchHistory(): Promise<DossierHistoryItem[]> {
+  const { data, error } = await supabase
+    .from("dossier_history")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) throw new Error(error.message);
+  return (data || []) as unknown as DossierHistoryItem[];
 }
