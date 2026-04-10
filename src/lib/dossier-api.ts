@@ -113,9 +113,9 @@ export interface DossierHistoryItem {
   dossier_data: Dossier;
 }
 
-export async function generateDossier(input: string, inputType: InputType): Promise<DossierResult> {
+export async function generateDossier(input: string, inputType: InputType, skipCache = false): Promise<DossierResult> {
   const { data, error } = await supabase.functions.invoke("generate-dossier", {
-    body: { input, input_type: inputType },
+    body: { input, input_type: inputType, skip_cache: skipCache },
   });
 
   if (error) {

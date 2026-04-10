@@ -4,7 +4,7 @@ import { DossierDisplay } from "@/components/DossierDisplay";
 import { DossierHistory } from "@/components/DossierHistory";
 import { toast } from "sonner";
 import { generateDossier, type Dossier, type DataSources, type LeadScore, type InputType } from "@/lib/dossier-api";
-import { Crosshair, RotateCcw, LogOut } from "lucide-react";
+import { Crosshair, RotateCcw, LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -14,26 +14,34 @@ export default function Index() {
   const [leadScore, setLeadScore] = useState<LeadScore | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [lastInput, setLastInput] = useState<{ input: string; inputType: InputType } | null>(null);
   
   const { signOut } = useAuth();
 
-  const handleSubmit = async (input: string, inputType: InputType) => {
+  const handleSubmit = async (input: string, inputType: InputType, skipCache = false) => {
     setIsLoading(true);
     setDossier(null);
     setDataSources(null);
     setLeadScore(null);
 
     try {
-      const result = await generateDossier(input, inputType);
+      const result = await generateDossier(input, inputType, skipCache);
       setDossier(result.dossier);
       setDataSources(result.data_sources);
       setLeadScore(result.lead_score || null);
+      setLastInput({ input, inputType });
       setRefreshKey((k) => k + 1);
-      toast.success(`Dossiê gerado com sucesso! Lead: ${input}`);
+      toast.success(skipCache ? "Dossiê atualizado com dados frescos!" : `Dossiê gerado com sucesso! Lead: ${input}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao gerar dossiê. Tente novamente");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleForceRefresh = () => {
+    if (lastInput) {
+      handleSubmit(lastInput.input, lastInput.inputType, true);
     }
   };
 
@@ -64,10 +72,15 @@ export default function Index() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {dossier && (
-              <Button variant="ghost" size="sm" onClick={handleNewSearch} className="text-muted-foreground">
-                <RotateCcw className="h-4 w-4 mr-1" /> Nova Pesquisa
-              </Button>
+            {dossier && !isLoading && (
+              <>
+                <Button variant="ghost" size="sm" onClick={handleForceRefresh} className="text-muted-foreground" disabled={!lastInput}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar Dados
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleNewSearch} className="text-muted-foreground">
+                  <RotateCcw className="h-4 w-4 mr-1" /> Nova Pesquisa
+                </Button>
+              </>
             )}
             <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground">
               <LogOut className="h-4 w-4 mr-1" /> Sair
