@@ -77,13 +77,13 @@ export async function generateDossier(input: string, inputType: InputType): Prom
   const dossier = data.dossier as Dossier;
 
   // Save to history
-  await supabase.from("dossier_history").insert({
+  await supabase.from("dossier_history").insert([{
     input,
     input_type: inputType,
     empresa_nome: dossier.empresa?.nome || null,
     empresa_cnpj: dossier.empresa?.cnpj || null,
     dossier_data: dossier as unknown as Record<string, unknown>,
-  });
+  }]);
 
   return dossier;
 }
