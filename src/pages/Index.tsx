@@ -4,14 +4,16 @@ import { DossierDisplay } from "@/components/DossierDisplay";
 import { DossierHistory } from "@/components/DossierHistory";
 import { useToast } from "@/hooks/use-toast";
 import { generateDossier, type Dossier, type InputType } from "@/lib/dossier-api";
-import { Crosshair, RotateCcw } from "lucide-react";
+import { Crosshair, RotateCcw, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Index() {
   const [dossier, setDossier] = useState<Dossier | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const { toast } = useToast();
+  const { signOut } = useAuth();
 
   const handleSubmit = async (input: string, inputType: InputType) => {
     setIsLoading(true);
@@ -51,11 +53,16 @@ export default function Index() {
               <p className="text-xs text-muted-foreground">Inteligência Comercial · Group Software</p>
             </div>
           </div>
-          {dossier && (
-            <Button variant="ghost" size="sm" onClick={() => setDossier(null)} className="text-muted-foreground">
-              <RotateCcw className="h-4 w-4 mr-1" /> Nova Pesquisa
+          <div className="flex items-center gap-2">
+            {dossier && (
+              <Button variant="ghost" size="sm" onClick={() => setDossier(null)} className="text-muted-foreground">
+                <RotateCcw className="h-4 w-4 mr-1" /> Nova Pesquisa
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground">
+              <LogOut className="h-4 w-4 mr-1" /> Sair
             </Button>
-          )}
+          </div>
         </div>
       </header>
 
