@@ -507,7 +507,17 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       );
     }
 
-    const aiData = await response.json();
+    const aiText = await response.text();
+    let aiData;
+    try {
+      aiData = JSON.parse(aiText);
+    } catch {
+      console.error("Failed to parse AI response:", aiText?.slice(0, 500));
+      return new Response(
+        JSON.stringify({ error: "Erro ao processar resposta da IA (parsing)" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     const content = aiData.choices?.[0]?.message?.content;
 
     if (!content) {
