@@ -172,6 +172,12 @@ async function fetchExternalSources(empresaNome: string, cnpj?: string | null, s
     { name: "jusbrasil_escavador", query: `"${searchName}" site:jusbrasil.com.br OR site:escavador.com`, opts: { limit: 3 } },
     { name: "linkedin", query: `"${searchName}" site:linkedin.com/company`, opts: { limit: 3 } },
     { name: "google_news", query: `"${searchName}" notícias empresa`, opts: { limit: 3, tbs: "qdr:y" } },
+    // NEW: Risk/financial sources
+    { name: "protestos_negativacoes", query: `"${searchName}" protesto negativação OR serasa OR "boa vista" OR SCPC`, opts: { limit: 3 } },
+    // NEW: Growth signals - hiring/expansion
+    { name: "vagas_crescimento", query: `"${searchName}" vagas OR contratando OR expansão OR "novo empreendimento"`, opts: { limit: 3, tbs: "qdr:m" } },
+    // NEW: Tech stack detection
+    { name: "tech_stack", query: `"${searchName}" ERP OR sistema OR software OR "super lógica" OR superlógica OR condomob OR MyCond OR "uau" OR "cidade inteligente"`, opts: { limit: 3 } },
   ];
 
   const results = await Promise.all(
@@ -327,6 +333,34 @@ REGRAS DE RECOMENDAÇÃO (logica_group_software):
 6. Sócio advogado: Foque em Compliance, Assembleia Digital, segurança jurídica.
 7. Muitos sócios: Foque em gestão de processos, produtividade da equipe, dashboards.
 
+NOVAS SEÇÕES DO DOSSIÊ ENRIQUECIDO:
+
+RISCO FINANCEIRO (risco_financeiro):
+- Analise os dados de "protestos_negativacoes" fornecidos pelas fontes externas.
+- Preencha: protestos (encontrado, resumo, quantidade_estimada), negativacoes (encontrado, resumo), regularidade_fiscal, nivel_risco ("Baixo"/"Médio"/"Alto"/"Crítico").
+- Se não houver dados de protestos/negativações nas fontes, marque "encontrado: false" e nivel_risco "Baixo".
+
+PEP (Pessoa Exposta Politicamente):
+- Para cada sócio, identifique se pode ser PEP (político, servidor público de alto escalão, etc.) baseado nos dados disponíveis.
+- Adicione "is_pep: true/false" e "pep_detalhes: string" em socio_principal e cada item de mapeamento_socios.
+- Se não houver evidências, marque is_pep: false.
+
+CONTATOS PARA ABORDAGEM (contatos_abordagem):
+- Liste decisores identificados com nome, cargo, canal preferencial (email/telefone/linkedin), e contato.
+- Use dados do LinkedIn, site da empresa, e Receita Federal.
+- Se não encontrar contatos adicionais, retorne array vazio.
+
+SINAIS DE CRESCIMENTO (sinais_crescimento):
+- Analise os dados de "vagas_crescimento" das fontes externas.
+- Liste sinais como: vagas abertas, expansão, novos empreendimentos, fusões, contratações.
+- Cada sinal tem: tipo ("positivo"/"negativo"/"neutro"), descricao.
+- Se não encontrar sinais, retorne array vazio.
+
+TECNOLOGIA ATUAL (empresa.tecnologia_atual):
+- Analise os dados de "tech_stack" das fontes externas.
+- Identifique se a empresa já usa algum ERP/software (Superlógica, Condomob, MyCond, UAU, etc.).
+- Se não identificar, escreva "Não identificado".
+
 ESTRUTURA DO "logica_group_software" NO OUTPUT:
 - "analise_fit": Um parágrafo explicando POR QUE o produto X da Group/PartnerBank resolve a dor Y do lead.
 - "modulos_sugeridos": Lista com nomes EXATOS dos produtos conforme aparecem nos catálogos (ex: "Group Condomínios", "Automação de Boletos PartnerBank", "Condomínio Garantido PartnerBank").
@@ -349,7 +383,8 @@ Estrutura do Output (JSON rigoroso):
     "telefone": "string",
     "redes_sociais": "string",
     "reputacao": "string (inclua dados do Reclame Aqui se disponíveis)",
-    "atividade_principal": "string"
+    "atividade_principal": "string",
+    "tecnologia_atual": "string (ERP/software identificado ou 'Não identificado')"
   },
   "socio_principal": {
     "nome": "string",
@@ -357,10 +392,12 @@ Estrutura do Output (JSON rigoroso):
     "formacao_academica": "string",
     "historico_profissional": "string",
     "linkedin": "string (URL real se encontrada)",
-    "background_provavel": "string"
+    "background_provavel": "string",
+    "is_pep": false,
+    "pep_detalhes": "string"
   },
   "mapeamento_socios": [
-    { "nome": "string", "cargo": "string", "background_provavel": "string" }
+    { "nome": "string", "cargo": "string", "background_provavel": "string", "is_pep": false, "pep_detalhes": "string" }
   ],
   "fontes_externas": {
     "reclame_aqui": { "encontrado": true, "resumo": "string", "url": "string" },
@@ -368,6 +405,18 @@ Estrutura do Output (JSON rigoroso):
     "linkedin": { "encontrado": true, "resumo": "string", "url": "string" },
     "noticias": { "encontrado": true, "resumo": "string", "urls": ["string"] }
   },
+  "risco_financeiro": {
+    "protestos": { "encontrado": false, "resumo": "string", "quantidade_estimada": 0 },
+    "negativacoes": { "encontrado": false, "resumo": "string" },
+    "regularidade_fiscal": "string",
+    "nivel_risco": "Baixo"
+  },
+  "contatos_abordagem": [
+    { "nome": "string", "cargo": "string", "canal": "string", "contato": "string" }
+  ],
+  "sinais_crescimento": [
+    { "tipo": "positivo", "descricao": "string" }
+  ],
   "insights_estrategicos": {
     "janela_oportunidade": "string",
     "abordagem_personalizada": {
@@ -392,7 +441,7 @@ Estrutura do Output (JSON rigoroso):
 
 IMPORTANTE: Responda SOMENTE com o JSON válido, sem markdown, sem backticks, sem texto adicional.`;
 
-// ==================== LEAD SCORE ====================
+// ==================== LEAD SCORE V2 ====================
 
 interface LeadScoreBreakdown {
   categoria: string;
@@ -420,6 +469,8 @@ function calculateLeadScore(
   const socio = (dossier.socio_principal || {}) as Record<string, string>;
   const socios = (dossier.mapeamento_socios || []) as Array<Record<string, string>>;
   const fontes = (dossier.fontes_externas || {}) as Record<string, { encontrado?: boolean }>;
+  const risco = (dossier.risco_financeiro || {}) as Record<string, unknown>;
+  const sinais = (dossier.sinais_crescimento || []) as Array<Record<string, string>>;
 
   // 1. Dados cadastrais (0-20)
   let cadastral = 0;
@@ -456,28 +507,60 @@ function calculateLeadScore(
   if (fontes.linkedin?.encontrado) digital += 5;
   breakdown.push({ categoria: "Presença Digital", pontos: digital, max: 15, detalhe: digital >= 10 ? "Boa presença online" : "Presença limitada" });
 
-  // 5. Reputação e riscos (0-20)
-  let reputacao = 10; // base neutra
-  if (fontes.reclame_aqui?.encontrado) {
-    reputacao += 5; // tem presença = empresa relevante
-  }
-  if (fontes.processos_judiciais?.encontrado) {
-    reputacao -= 3; // risco judicial
-  }
-  reputacao = Math.max(0, Math.min(20, reputacao));
-  breakdown.push({ categoria: "Reputação / Riscos", pontos: reputacao, max: 20, detalhe: fontes.processos_judiciais?.encontrado ? "Processos judiciais encontrados" : "Sem alertas críticos" });
+  // 5. Reputação e riscos (0-15)
+  let reputacao = 8;
+  if (fontes.reclame_aqui?.encontrado) reputacao += 4;
+  if (fontes.processos_judiciais?.encontrado) reputacao -= 3;
+  reputacao = Math.max(0, Math.min(15, reputacao));
+  breakdown.push({ categoria: "Reputação / Riscos", pontos: reputacao, max: 15, detalhe: fontes.processos_judiciais?.encontrado ? "Processos judiciais encontrados" : "Sem alertas críticos" });
 
-  // 6. Cobertura de dados (0-20)
+  // 6. Cobertura de dados (0-15)
   let cobertura = 0;
   const externalFound = externalResults.filter(r => r.results.length > 0).length;
-  cobertura += Math.min(12, externalFound * 3);
-  if (socio.formacao_academica && socio.formacao_academica !== "Não identificado") cobertura += 4;
-  if (socio.historico_profissional && socio.historico_profissional !== "Não identificado") cobertura += 4;
-  cobertura = Math.min(20, cobertura);
-  breakdown.push({ categoria: "Cobertura de Dados", pontos: cobertura, max: 20, detalhe: `${externalFound}/4 fontes externas com dados` });
+  cobertura += Math.min(9, externalFound * 2);
+  if (socio.formacao_academica && socio.formacao_academica !== "Não identificado") cobertura += 3;
+  if (socio.historico_profissional && socio.historico_profissional !== "Não identificado") cobertura += 3;
+  cobertura = Math.min(15, cobertura);
+  breakdown.push({ categoria: "Cobertura de Dados", pontos: cobertura, max: 15, detalhe: `${externalFound}/7 fontes externas com dados` });
+
+  // 7. NEW: Risco Financeiro (-10 a +10) → mapped to 0-10
+  let riscoScore = 5; // neutral base
+  const protestos = (risco.protestos || {}) as Record<string, unknown>;
+  const negativacoes = (risco.negativacoes || {}) as Record<string, unknown>;
+  const nivelRisco = (risco.nivel_risco as string) || "Baixo";
+  if (nivelRisco === "Baixo") riscoScore = 10;
+  else if (nivelRisco === "Médio") riscoScore = 6;
+  else if (nivelRisco === "Alto") riscoScore = 3;
+  else if (nivelRisco === "Crítico") riscoScore = 0;
+  const riscoDetalhe = protestos.encontrado || negativacoes.encontrado
+    ? `Nível: ${nivelRisco} — protestos/negativações detectados`
+    : `Nível: ${nivelRisco} — sem alertas financeiros`;
+  breakdown.push({ categoria: "Saúde Financeira", pontos: riscoScore, max: 10, detalhe: riscoDetalhe });
+
+  // 8. NEW: Fit Tecnológico (0-10)
+  let fitTech = 5;
+  const techAtual = empresa.tecnologia_atual || "Não identificado";
+  if (techAtual === "Não identificado") {
+    fitTech = 7; // greenfield = opportunity
+  } else if (/group|partnerbank/i.test(techAtual)) {
+    fitTech = 2; // already a client
+  } else {
+    fitTech = 10; // uses competitor = migration opportunity
+  }
+  breakdown.push({ categoria: "Fit Tecnológico", pontos: fitTech, max: 10, detalhe: techAtual === "Não identificado" ? "Sem ERP identificado (greenfield)" : `Usa: ${techAtual}` });
+
+  // 9. NEW: Sinais de Crescimento (0-10)
+  let crescimento = 0;
+  const sinaisPositivos = sinais.filter(s => s.tipo === "positivo").length;
+  const sinaisNegativos = sinais.filter(s => s.tipo === "negativo").length;
+  crescimento = Math.min(10, sinaisPositivos * 3) - Math.min(5, sinaisNegativos * 2);
+  crescimento = Math.max(0, crescimento);
+  const vagasResult = externalResults.find(r => r.source === "vagas_crescimento");
+  if (vagasResult && vagasResult.results.length > 0) crescimento = Math.min(10, crescimento + 2);
+  breakdown.push({ categoria: "Sinais de Crescimento", pontos: crescimento, max: 10, detalhe: sinaisPositivos > 0 ? `${sinaisPositivos} sinal(is) positivo(s)` : "Sem sinais identificados" });
 
   const total = breakdown.reduce((s, b) => s + b.pontos, 0);
-  const max = 100;
+  const max = 130;
   const percentual = Math.round((total / max) * 100);
 
   let classificacao: LeadScore["classificacao"];
@@ -527,7 +610,6 @@ serve(async (req) => {
     }
 
     // ==================== CASCADE LOGIC ====================
-    // For "nome" inputs: try LinkedIn search → find company → extract CNPJ
     let cnpjContext = "";
     let cnpjDataFound = false;
     let empresaNome = "";
@@ -535,7 +617,6 @@ serve(async (req) => {
     let cnpj = extractCnpj(input as string, input_type as string);
 
     if (cnpj) {
-      // Direct CNPJ input
       console.log(`Fetching CNPJ data for: ${cnpj}`);
       const cnpjData = await fetchCnpjData(cnpj);
       if (cnpjData) {
@@ -545,24 +626,20 @@ serve(async (req) => {
         console.log("Successfully fetched CNPJ data from BrasilAPI");
       }
     } else if (input_type === "nome") {
-      // CASCADE: Nome → LinkedIn → Empresa → CNPJ
       console.log(`[Cascade] Starting name-based cascade for: "${input}"`);
       
-      // Step 1: Search LinkedIn for the person
       const linkedinSearch = await firecrawlSearch(
         `"${input}" site:linkedin.com/in`, "cascade_linkedin", { limit: 3, lang: "pt-br", country: "br" }
       );
       
       let companyFromLinkedin = "";
       if (linkedinSearch.results.length > 0) {
-        // Extract company info from LinkedIn results
         const linkedinContent = linkedinSearch.results
           .map(r => `${r.title || ""} ${r.description || ""} ${r.markdown?.slice(0, 500) || ""}`)
           .join(" ");
         cascadeContext += `\n=== LINKEDIN DO SÓCIO (Cascade) ===\n${linkedinContent.slice(0, 2000)}\n`;
         console.log(`[Cascade] LinkedIn found ${linkedinSearch.results.length} results`);
 
-        // Try to extract company name from LinkedIn result using simple patterns
         const companyPatterns = [
           /(?:at|na|em|@)\s+([A-ZÀ-Ú][A-Za-zÀ-ú\s&.,-]+(?:Ltda|S\.?A\.?|EIRELI|ME|EPP|Administradora|Imobiliária|Imóveis|Gestão|Condomín)[\w.]*)/i,
           /(?:Gerente|Diretor|Sócio|CEO|Fundador|Proprietário|Administrador)(?:\s+\w+)?\s+(?:at|na|em|-|–|·)\s+([A-ZÀ-Ú][A-Za-zÀ-ú\s&.,-]+)/i,
@@ -574,7 +651,6 @@ serve(async (req) => {
             break;
           }
         }
-        // Fallback: use title fragments
         if (!companyFromLinkedin) {
           for (const r of linkedinSearch.results) {
             const titleParts = (r.title || "").split(/\s*[-–·|]\s*/);
@@ -590,7 +666,6 @@ serve(async (req) => {
         console.log(`[Cascade] Company extracted from LinkedIn: "${companyFromLinkedin}"`);
         empresaNome = companyFromLinkedin;
 
-        // Step 2: Search for CNPJ of the company
         const cnpjSearch = await firecrawlSearch(
           `"${companyFromLinkedin}" CNPJ site:cnpj.biz OR site:casadosdados.com.br OR site:cnpja.com`,
           "cascade_cnpj", { limit: 3 }
@@ -618,7 +693,6 @@ serve(async (req) => {
       }
     }
 
-    // Use input as company name if still empty
     if (!empresaNome && input_type === "email") {
       empresaNome = (input as string).split("@")[1]?.split(".")[0] || (input as string);
     }
@@ -626,22 +700,25 @@ serve(async (req) => {
       empresaNome = input as string;
     }
 
-    // 2. Fetch external sources in parallel via Firecrawl
+    // Fetch external sources (now includes 7 sources)
     console.log(`Fetching external sources...${skip_cache ? " (cache ignorado)" : ""}`);
     const externalResults = await fetchExternalSources(empresaNome, cnpj, !!skip_cache);
     const externalContext = formatExternalContext(externalResults);
     const externalSourcesFound = externalResults.filter((r) => r.results.length > 0).map((r) => r.source);
     console.log(`External sources found: ${externalSourcesFound.join(", ") || "none"}`);
 
-    // 3. Call AI with all context
-    const userMessage = `Gere o dossiê completo para o seguinte lead:
+    // Call AI with all context
+    const userMessage = `Gere o dossiê completo ENRIQUECIDO para o seguinte lead:
 Tipo de input: ${input_type}
 Dado fornecido: ${input}
 ${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa → CNPJ) ===${cascadeContext}\n=== FIM CASCATA ===` : ""}
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
-${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê.` : ""}
+${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual.` : ""}
 
-LEMBRETE: Na seção "logica_group_software", use ESTRITAMENTE os produtos dos catálogos Group Software e PartnerBank fornecidos no system prompt. Inclua "analise_fit", "modulos_sugeridos" (nomes exatos dos sites), e "gancho_venda" (copy do site).
+LEMBRETE OBRIGATÓRIO:
+1. Na seção "logica_group_software", use ESTRITAMENTE os produtos dos catálogos Group Software e PartnerBank.
+2. Preencha TODAS as novas seções: risco_financeiro, contatos_abordagem, sinais_crescimento, tecnologia_atual, is_pep para sócios.
+3. Inclua "analise_fit", "modulos_sugeridos" (nomes exatos dos sites), e "gancho_venda" (copy do site).
 
 Analise profundamente e retorne o JSON estruturado conforme o formato especificado.`;
 
@@ -713,7 +790,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       );
     }
 
-    // Calculate lead qualification score
+    // Calculate lead qualification score V2
     const lead_score = calculateLeadScore(dossier, cnpjDataFound, externalResults);
 
     // Build data_sources metadata
@@ -722,7 +799,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       campos_receita: cnpjDataFound
         ? ["nome", "cnpj", "situacao", "abertura", "porte", "capital_social", "endereco", "telefone", "atividade_principal", "mapeamento_socios"]
         : [],
-      campos_ia: ["redes_sociais", "formacao_academica", "historico_profissional", "linkedin", "background_provavel", "insights_estrategicos", "logica_group_software"],
+      campos_ia: ["redes_sociais", "formacao_academica", "historico_profissional", "linkedin", "background_provavel", "insights_estrategicos", "logica_group_software", "risco_financeiro", "contatos_abordagem", "sinais_crescimento", "tecnologia_atual"],
       fontes_externas: externalSourcesFound,
       firecrawl_details: externalResults.map((r) => ({
         source: r.source,
