@@ -404,7 +404,7 @@ serve(async (req) => {
   }
 
   try {
-    const { input, input_type } = await req.json();
+    const { input, input_type, skip_cache } = await req.json();
 
     if (!input || !input_type) {
       return new Response(
