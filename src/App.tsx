@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import LeadRanking from "./pages/LeadRanking.tsx";
+import Historico from "./pages/Historico.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="/auth" element={<AuthRoute />} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/ranking" element={<ProtectedRoute><LeadRanking /></ProtectedRoute>} />
+          <Route path="/historico" element={<ProtectedRoute><Historico /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

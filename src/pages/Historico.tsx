@@ -2,11 +2,10 @@ import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  Trophy, ArrowUpDown, ArrowUp, ArrowDown, Download, Search, Filter,
-  Building2, Hash, Mail, User, Flame, Thermometer, Snowflake, Eye,
-  LogOut, Crosshair, BarChart3, History,
+  History, Download, Search, Filter, Building2, Hash, Mail, User,
+  Eye, LogOut, Crosshair, BarChart3, Calendar, X, Flame, Thermometer, Snowflake,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,9 +21,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { fetchHistory, type DossierHistoryItem, type Dossier } from "@/lib/dossier-api";
 import { useNavigate } from "react-router-dom";
 
-type SortField = "score" | "empresa" | "data";
-type SortDir = "asc" | "desc";
-type ScoreFilter = "all" | "muito_quente" | "quente" | "morno" | "frio";
+type TypeFilter = "all" | "cnpj" | "email" | "nome";
+type DateFilter = "all" | "today" | "week" | "month";
+
+const typeIcons: Record<string, typeof Mail> = { email: Mail, cnpj: Hash, nome: User };
+const typeLabels: Record<string, string> = { cnpj: "CNPJ", email: "E-mail", nome: "Nome" };
 
 function calcScore(d: Dossier): number {
   let score = 0;
@@ -59,27 +60,28 @@ function getClassificacao(s: number) {
   return { label: "Frio", color: "text-blue-400", bg: "bg-blue-500/10", icon: Snowflake };
 }
 
-function exportCSV(rows: { empresa: string; cnpj: string; score: number; classificacao: string; input_type: string; data: string }[]) {
-  const header = "Empresa,CNPJ,Score,Classificação,Tipo,Data\n";
-  const body = rows.map((r) =>
-    `"${r.empresa}","${r.cnpj}",${r.score},"${r.classificacao}","${r.input_type}","${r.data}"`
-  ).join("\n");
+function exportCSV(rows: DossierHistoryItem[]) {
+  const header = "Empresa,CNPJ,Tipo,Input,Score,Classificação,Data\n";
+  const body = rows.map((r) => {
+    const s = calcScore(r.dossier_data);
+    const c = getClassificacao(s);
+    return `"${r.empresa_nome || ""}","${r.empresa_cnpj || ""}","${typeLabels[r.input_type] || r.input_type}","${r.input}",${s},"${c.label}","${format(new Date(r.created_at), "dd/MM/yyyy HH:mm")}"`;
+  }).join("\n");
   const blob = new Blob([header + body], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `leads_ranking_${format(new Date(), "yyyy-MM-dd")}.csv`;
+  a.download = `historico_dossies_${format(new Date(), "yyyy-MM-dd")}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-export default function LeadRanking() {
+export default function Historico() {
   const [items, setItems] = useState<DossierHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [scoreFilter, setScoreFilter] = useState<ScoreFilter>("all");
-  const [sortField, setSortField] = useState<SortField>("score");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const { signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -87,15 +89,8 @@ export default function LeadRanking() {
     fetchHistory().then(setItems).catch(console.error).finally(() => setLoading(false));
   }, []);
 
-  const scored = useMemo(() =>
-    items.map((item) => {
-      const s = calcScore(item.dossier_data);
-      const c = getClassificacao(s);
-      return { ...item, score: s, classificacao: c.label, classInfo: c };
-    }), [items]);
-
   const filtered = useMemo(() => {
-    let list = scored;
+    let list = items;
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((i) =>
@@ -104,51 +99,28 @@ export default function LeadRanking() {
         i.input.toLowerCase().includes(q)
       );
     }
-    if (scoreFilter !== "all") {
-      const map: Record<string, string> = { muito_quente: "Muito Quente", quente: "Quente", morno: "Morno", frio: "Frio" };
-      list = list.filter((i) => i.classificacao === map[scoreFilter]);
+    if (typeFilter !== "all") {
+      list = list.filter((i) => i.input_type === typeFilter);
     }
-    list.sort((a, b) => {
-      let cmp = 0;
-      if (sortField === "score") cmp = a.score - b.score;
-      else if (sortField === "empresa") cmp = (a.empresa_nome || "").localeCompare(b.empresa_nome || "");
-      else cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      return sortDir === "desc" ? -cmp : cmp;
-    });
+    if (dateFilter !== "all") {
+      const now = new Date();
+      list = list.filter((i) => {
+        const d = new Date(i.created_at);
+        if (dateFilter === "today") return d.toDateString() === now.toDateString();
+        if (dateFilter === "week") return now.getTime() - d.getTime() < 7 * 86400000;
+        if (dateFilter === "month") return now.getTime() - d.getTime() < 30 * 86400000;
+        return true;
+      });
+    }
     return list;
-  }, [scored, search, scoreFilter, sortField, sortDir]);
+  }, [items, search, typeFilter, dateFilter]);
 
-  const stats = useMemo(() => {
-    const total = scored.length;
-    const mq = scored.filter((i) => i.classificacao === "Muito Quente").length;
-    const q = scored.filter((i) => i.classificacao === "Quente").length;
-    const m = scored.filter((i) => i.classificacao === "Morno").length;
-    const f = scored.filter((i) => i.classificacao === "Frio").length;
-    const avg = total ? Math.round(scored.reduce((s, i) => s + i.score, 0) / total) : 0;
-    return { total, mq, q, m, f, avg };
-  }, [scored]);
+  const activeFilters = [typeFilter !== "all", dateFilter !== "all", search !== ""].filter(Boolean).length;
 
-  const toggleSort = (field: SortField) => {
-    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortField(field); setSortDir("desc"); }
-  };
-
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
-    return sortDir === "desc"
-      ? <ArrowDown className="h-3 w-3 ml-1 text-primary" />
-      : <ArrowUp className="h-3 w-3 ml-1 text-primary" />;
-  };
-
-  const handleExport = () => {
-    exportCSV(filtered.map((i) => ({
-      empresa: i.empresa_nome || i.input,
-      cnpj: i.empresa_cnpj || "",
-      score: i.score,
-      classificacao: i.classificacao,
-      input_type: i.input_type,
-      data: format(new Date(i.created_at), "dd/MM/yyyy HH:mm"),
-    })));
+  const clearFilters = () => {
+    setSearch("");
+    setTypeFilter("all");
+    setDateFilter("all");
   };
 
   return (
@@ -166,7 +138,7 @@ export default function LeadRanking() {
           </div>
           <div className="flex items-center gap-2">
             <AppNavLink to="/" icon={Search} label="Pesquisa" />
-            <AppNavLink to="/ranking" icon={BarChart3} label="Ranking" active />
+            <AppNavLink to="/ranking" icon={BarChart3} label="Ranking" />
             <AppNavLink to="/historico" icon={History} label="Histórico" />
             <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground">
               <LogOut className="h-4 w-4 mr-1" /> Sair
@@ -179,31 +151,23 @@ export default function LeadRanking() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-heading font-bold flex items-center gap-2">
-              <Trophy className="h-6 w-6 text-primary" /> Ranking de Leads
+              <History className="h-6 w-6 text-primary" /> Histórico de Dossiês
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">Comparativo dos leads gerados, ordenados por qualificação</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Todos os dossiês gerados com filtros avançados e exportação
+            </p>
           </div>
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={filtered.length === 0}>
-            <Download className="h-4 w-4 mr-1" /> Exportar CSV
-          </Button>
-        </div>
-
-        {/* Stats cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-          {[
-            { label: "Total", value: stats.total, color: "text-foreground" },
-            { label: "Muito Quente", value: stats.mq, color: "text-red-400" },
-            { label: "Quente", value: stats.q, color: "text-orange-400" },
-            { label: "Morno", value: stats.m, color: "text-yellow-400" },
-            { label: "Frio", value: stats.f, color: "text-blue-400" },
-          ].map((s) => (
-            <Card key={s.label} className="border-border/50">
-              <CardContent className="p-4 text-center">
-                <p className={`text-2xl font-heading font-bold ${s.color}`}>{s.value}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-              </CardContent>
-            </Card>
-          ))}
+          <div className="flex items-center gap-2">
+            {activeFilters > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+                <X className="h-4 w-4 mr-1" /> Limpar filtros
+                <Badge variant="secondary" className="ml-1 text-xs">{activeFilters}</Badge>
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => exportCSV(filtered)} disabled={filtered.length === 0}>
+              <Download className="h-4 w-4 mr-1" /> Exportar CSV
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -217,45 +181,51 @@ export default function LeadRanking() {
               className="pl-9 bg-card border-border/50"
             />
           </div>
-          <Select value={scoreFilter} onValueChange={(v) => setScoreFilter(v as ScoreFilter)}>
-            <SelectTrigger className="w-full sm:w-48 bg-card border-border/50">
+          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
+            <SelectTrigger className="w-full sm:w-44 bg-card border-border/50">
               <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
-              <SelectValue placeholder="Classificação" />
+              <SelectValue placeholder="Tipo" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="muito_quente">🔥 Muito Quente</SelectItem>
-              <SelectItem value="quente">🟠 Quente</SelectItem>
-              <SelectItem value="morno">🟡 Morno</SelectItem>
-              <SelectItem value="frio">🔵 Frio</SelectItem>
+              <SelectItem value="all">Todos os tipos</SelectItem>
+              <SelectItem value="cnpj"># CNPJ</SelectItem>
+              <SelectItem value="email">✉ E-mail</SelectItem>
+              <SelectItem value="nome">👤 Nome</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
+            <SelectTrigger className="w-full sm:w-44 bg-card border-border/50">
+              <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Período" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Qualquer data</SelectItem>
+              <SelectItem value="today">Hoje</SelectItem>
+              <SelectItem value="week">Últimos 7 dias</SelectItem>
+              <SelectItem value="month">Últimos 30 dias</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
+        {/* Stats bar */}
+        <div className="flex items-center gap-4 mb-4 text-sm text-muted-foreground">
+          <span>{filtered.length} de {items.length} registros</span>
+          {typeFilter !== "all" && <Badge variant="outline" className="text-xs">{typeLabels[typeFilter] || typeFilter}</Badge>}
+          {dateFilter !== "all" && <Badge variant="outline" className="text-xs">{dateFilter === "today" ? "Hoje" : dateFilter === "week" ? "7 dias" : "30 dias"}</Badge>}
+        </div>
+
         {/* Table */}
         <Card className="border-border/50">
-          <ScrollArea className="h-[500px]">
+          <ScrollArea className="h-[560px]">
             <Table>
               <TableHeader>
                 <TableRow className="border-border/50 hover:bg-transparent">
                   <TableHead className="w-12 text-center">#</TableHead>
-                  <TableHead>
-                    <button onClick={() => toggleSort("empresa")} className="flex items-center font-heading text-xs">
-                      Empresa <SortIcon field="empresa" />
-                    </button>
-                  </TableHead>
+                  <TableHead>Empresa</TableHead>
                   <TableHead className="hidden md:table-cell">CNPJ</TableHead>
-                  <TableHead>
-                    <button onClick={() => toggleSort("score")} className="flex items-center font-heading text-xs">
-                      Score <SortIcon field="score" />
-                    </button>
-                  </TableHead>
-                  <TableHead className="hidden sm:table-cell">Classificação</TableHead>
-                  <TableHead>
-                    <button onClick={() => toggleSort("data")} className="flex items-center font-heading text-xs">
-                      Data <SortIcon field="data" />
-                    </button>
-                  </TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Score</TableHead>
+                  <TableHead className="hidden sm:table-cell">Data</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
@@ -269,21 +239,22 @@ export default function LeadRanking() {
                 ) : filtered.length === 0 ? (
                   <TableRow className="border-border/50">
                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                      Nenhum lead encontrado
+                      Nenhum dossiê encontrado
                     </TableCell>
                   </TableRow>
                 ) : (
                   filtered.map((item, idx) => {
-                    const Icon = item.classInfo.icon;
+                    const Icon = typeIcons[item.input_type] || User;
+                    const score = calcScore(item.dossier_data);
+                    const cls = getClassificacao(score);
+                    const ClsIcon = cls.icon;
                     return (
                       <TableRow
                         key={item.id}
                         className="border-border/50 cursor-pointer hover:bg-secondary/30 transition-colors"
                         onClick={() => navigate("/", { state: { dossier: item.dossier_data } })}
                       >
-                        <TableCell className="text-center text-muted-foreground font-mono text-sm">
-                          {idx + 1}
-                        </TableCell>
+                        <TableCell className="text-center text-muted-foreground font-mono text-sm">{idx + 1}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -296,17 +267,20 @@ export default function LeadRanking() {
                           {item.empresa_cnpj || "—"}
                         </TableCell>
                         <TableCell>
-                          <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-sm font-bold ${item.classInfo.bg} ${item.classInfo.color}`}>
-                            {item.score}
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">
-                          <Badge variant="outline" className={`${item.classInfo.color} border-current/20 text-xs`}>
+                          <Badge variant="outline" className="text-xs">
                             <Icon className="h-3 w-3 mr-1" />
-                            {item.classificacao}
+                            {typeLabels[item.input_type] || item.input_type}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-sm font-bold ${cls.bg} ${cls.color}`}>
+                              <ClsIcon className="h-3 w-3" />
+                              {score}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground whitespace-nowrap">
                           {format(new Date(item.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
                         </TableCell>
                         <TableCell>
@@ -320,10 +294,6 @@ export default function LeadRanking() {
             </Table>
           </ScrollArea>
         </Card>
-
-        <p className="text-xs text-muted-foreground text-center mt-4">
-          Score médio: <span className="font-bold text-foreground">{stats.avg}</span> · {filtered.length} de {scored.length} leads exibidos
-        </p>
       </main>
     </div>
   );
