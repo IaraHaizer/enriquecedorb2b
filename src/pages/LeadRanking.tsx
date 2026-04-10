@@ -3,10 +3,9 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Trophy, ArrowUpDown, ArrowUp, ArrowDown, Download, Search, Filter,
-  Building2, Hash, Mail, User, Flame, Thermometer, Snowflake, Eye,
-  LogOut, Crosshair, BarChart3, History,
+  Building2, Eye, LogOut, Crosshair, BarChart3, History,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,50 +18,18 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AppNavLink } from "@/components/AppNavLink";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchHistory, type DossierHistoryItem, type Dossier } from "@/lib/dossier-api";
+import { fetchHistory, type DossierHistoryItem } from "@/lib/dossier-api";
+import { calcScoreV2, getClassificacaoV2, SCORE_MAX } from "@/lib/lead-scoring";
 import { useNavigate } from "react-router-dom";
 
 type SortField = "score" | "empresa" | "data";
 type SortDir = "asc" | "desc";
 type ScoreFilter = "all" | "muito_quente" | "quente" | "morno" | "frio";
 
-function calcScore(d: Dossier): number {
-  let score = 0;
-  const e = d.empresa;
-  if (e?.cnpj) score += 10;
-  if (e?.situacao?.toLowerCase().includes("ativa")) score += 10;
-  if (e?.abertura) {
-    const y = new Date().getFullYear() - new Date(e.abertura.split("/").reverse().join("-")).getFullYear();
-    score += Math.min(y >= 5 ? 10 : y >= 2 ? 6 : 3, 10);
-  }
-  if (e?.capital_social) {
-    const v = parseFloat(e.capital_social.replace(/[^\d,]/g, "").replace(",", "."));
-    score += v > 500000 ? 5 : v > 100000 ? 3 : 1;
-  }
-  if (d.socio_principal?.linkedin && d.socio_principal.linkedin !== "Não encontrado") score += 8;
-  if (e?.redes_sociais && e.redes_sociais !== "Não informado") score += 7;
-  if (d.mapeamento_socios?.length > 2) score += 10;
-  else if (d.mapeamento_socios?.length > 0) score += 5;
-  if (d.fontes_externas?.reclame_aqui?.encontrado) score += 5;
-  if (d.fontes_externas?.processos_judiciais?.encontrado) score -= 5;
-  if (d.fontes_externas?.linkedin?.encontrado) score += 5;
-  if (d.fontes_externas?.noticias?.encontrado) score += 5;
-  const fields = Object.values(e || {}).filter((v) => v && v !== "Não informado" && v !== "Não encontrado").length;
-  score += Math.min(Math.floor(fields / 2), 10);
-  return Math.max(0, Math.min(100, score));
-}
-
-function getClassificacao(s: number) {
-  if (s >= 80) return { label: "Muito Quente", color: "text-red-400", bg: "bg-red-500/10", icon: Flame };
-  if (s >= 60) return { label: "Quente", color: "text-orange-400", bg: "bg-orange-500/10", icon: Flame };
-  if (s >= 40) return { label: "Morno", color: "text-yellow-400", bg: "bg-yellow-500/10", icon: Thermometer };
-  return { label: "Frio", color: "text-blue-400", bg: "bg-blue-500/10", icon: Snowflake };
-}
-
-function exportCSV(rows: { empresa: string; cnpj: string; score: number; classificacao: string; input_type: string; data: string }[]) {
-  const header = "Empresa,CNPJ,Score,Classificação,Tipo,Data\n";
+function exportCSV(rows: { empresa: string; cnpj: string; score: number; percentual: number; classificacao: string; input_type: string; data: string }[]) {
+  const header = "Empresa,CNPJ,Score,Percentual,Classificação,Tipo,Data\n";
   const body = rows.map((r) =>
-    `"${r.empresa}","${r.cnpj}",${r.score},"${r.classificacao}","${r.input_type}","${r.data}"`
+    `"${r.empresa}","${r.cnpj}",${r.score}/${SCORE_MAX},${r.percentual}%,"${r.classificacao}","${r.input_type}","${r.data}"`
   ).join("\n");
   const blob = new Blob([header + body], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -89,9 +56,9 @@ export default function LeadRanking() {
 
   const scored = useMemo(() =>
     items.map((item) => {
-      const s = calcScore(item.dossier_data);
-      const c = getClassificacao(s);
-      return { ...item, score: s, classificacao: c.label, classInfo: c };
+      const result = calcScoreV2(item.dossier_data);
+      const c = getClassificacaoV2(result.percentual);
+      return { ...item, score: result.total, percentual: result.percentual, classificacao: c.label, classInfo: c, breakdown: result.breakdown };
     }), [items]);
 
   const filtered = useMemo(() => {
@@ -124,7 +91,7 @@ export default function LeadRanking() {
     const q = scored.filter((i) => i.classificacao === "Quente").length;
     const m = scored.filter((i) => i.classificacao === "Morno").length;
     const f = scored.filter((i) => i.classificacao === "Frio").length;
-    const avg = total ? Math.round(scored.reduce((s, i) => s + i.score, 0) / total) : 0;
+    const avg = total ? Math.round(scored.reduce((s, i) => s + i.percentual, 0) / total) : 0;
     return { total, mq, q, m, f, avg };
   }, [scored]);
 
@@ -145,6 +112,7 @@ export default function LeadRanking() {
       empresa: i.empresa_nome || i.input,
       cnpj: i.empresa_cnpj || "",
       score: i.score,
+      percentual: i.percentual,
       classificacao: i.classificacao,
       input_type: i.input_type,
       data: format(new Date(i.created_at), "dd/MM/yyyy HH:mm"),
@@ -181,7 +149,7 @@ export default function LeadRanking() {
             <h2 className="text-2xl font-heading font-bold flex items-center gap-2">
               <Trophy className="h-6 w-6 text-primary" /> Ranking de Leads
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">Comparativo dos leads gerados, ordenados por qualificação</p>
+            <p className="text-sm text-muted-foreground mt-1">Score V2 · 9 dimensões · {SCORE_MAX} pontos máximos</p>
           </div>
           <Button variant="outline" size="sm" onClick={handleExport} disabled={filtered.length === 0}>
             <Download className="h-4 w-4 mr-1" /> Exportar CSV
@@ -189,13 +157,14 @@ export default function LeadRanking() {
         </div>
 
         {/* Stats cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
           {[
             { label: "Total", value: stats.total, color: "text-foreground" },
             { label: "Muito Quente", value: stats.mq, color: "text-red-400" },
             { label: "Quente", value: stats.q, color: "text-orange-400" },
             { label: "Morno", value: stats.m, color: "text-yellow-400" },
             { label: "Frio", value: stats.f, color: "text-blue-400" },
+            { label: "Média", value: `${stats.avg}%`, color: "text-primary" },
           ].map((s) => (
             <Card key={s.label} className="border-border/50">
               <CardContent className="p-4 text-center">
@@ -247,7 +216,7 @@ export default function LeadRanking() {
                   <TableHead className="hidden md:table-cell">CNPJ</TableHead>
                   <TableHead>
                     <button onClick={() => toggleSort("score")} className="flex items-center font-heading text-xs">
-                      Score <SortIcon field="score" />
+                      Score V2 <SortIcon field="score" />
                     </button>
                   </TableHead>
                   <TableHead className="hidden sm:table-cell">Classificação</TableHead>
@@ -297,7 +266,7 @@ export default function LeadRanking() {
                         </TableCell>
                         <TableCell>
                           <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-sm font-bold ${item.classInfo.bg} ${item.classInfo.color}`}>
-                            {item.score}
+                            {item.score}<span className="text-xs font-normal opacity-60">/{SCORE_MAX}</span>
                           </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell">
@@ -322,7 +291,7 @@ export default function LeadRanking() {
         </Card>
 
         <p className="text-xs text-muted-foreground text-center mt-4">
-          Score médio: <span className="font-bold text-foreground">{stats.avg}</span> · {filtered.length} de {scored.length} leads exibidos
+          Score médio: <span className="font-bold text-foreground">{stats.avg}%</span> · {filtered.length} de {scored.length} leads exibidos
         </p>
       </main>
     </div>
