@@ -12,7 +12,7 @@ export default function Index() {
   const [dossier, setDossier] = useState<Dossier | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { toast } = useToast();
+  
   const { signOut } = useAuth();
 
   const handleSubmit = async (input: string, inputType: InputType) => {
