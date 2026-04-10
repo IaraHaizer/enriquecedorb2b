@@ -4,6 +4,7 @@ import { ptBR } from "date-fns/locale";
 import {
   History, Download, Search, Filter, Building2, Hash, Mail, User,
   Eye, LogOut, Crosshair, BarChart3, Calendar, X, Flame, Thermometer, Snowflake,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -76,12 +77,15 @@ function exportCSV(rows: DossierHistoryItem[]) {
   URL.revokeObjectURL(url);
 }
 
+const PAGE_SIZE = 15;
+
 export default function Historico() {
   const [items, setItems] = useState<DossierHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [page, setPage] = useState(1);
   const { signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -114,6 +118,12 @@ export default function Historico() {
     }
     return list;
   }, [items, search, typeFilter, dateFilter]);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [search, typeFilter, dateFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const activeFilters = [typeFilter !== "all", dateFilter !== "all", search !== ""].filter(Boolean).length;
 
@@ -243,18 +253,19 @@ export default function Historico() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((item, idx) => {
+                  paginated.map((item, idx) => {
                     const Icon = typeIcons[item.input_type] || User;
                     const score = calcScore(item.dossier_data);
                     const cls = getClassificacao(score);
                     const ClsIcon = cls.icon;
+                    const globalIdx = (page - 1) * PAGE_SIZE + idx;
                     return (
                       <TableRow
                         key={item.id}
                         className="border-border/50 cursor-pointer hover:bg-secondary/30 transition-colors"
                         onClick={() => navigate("/", { state: { dossier: item.dossier_data } })}
                       >
-                        <TableCell className="text-center text-muted-foreground font-mono text-sm">{idx + 1}</TableCell>
+                        <TableCell className="text-center text-muted-foreground font-mono text-sm">{globalIdx + 1}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -294,6 +305,45 @@ export default function Historico() {
             </Table>
           </ScrollArea>
         </Card>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-sm text-muted-foreground">
+              Página {page} de {totalPages} · {filtered.length} registros
+            </p>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                .reduce<(number | "...")[]>((acc, p, i, arr) => {
+                  if (i > 0 && p - (arr[i - 1]) > 1) acc.push("...");
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, i) =>
+                  p === "..." ? (
+                    <span key={`e${i}`} className="px-2 text-muted-foreground text-sm">…</span>
+                  ) : (
+                    <Button
+                      key={p}
+                      variant={p === page ? "default" : "outline"}
+                      size="sm"
+                      className="w-8 h-8 p-0"
+                      onClick={() => setPage(p as number)}
+                    >
+                      {p}
+                    </Button>
+                  )
+                )}
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
