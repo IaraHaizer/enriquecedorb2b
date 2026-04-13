@@ -183,24 +183,47 @@ function generateCandidateDomains(empresaNome: string, cnpjData: Record<string, 
     .replace(/[àáâãä]/g, "a").replace(/[èéêë]/g, "e").replace(/[ìíîï]/g, "i")
     .replace(/[òóôõö]/g, "o").replace(/[ùúûü]/g, "u").replace(/[ç]/g, "c");
 
+  // Activity-related keywords to combine with the company name
+  const activityKeywords = extractActivityKeywords(cnpjData);
+
   for (const nome of [nomeFantasia, razaoSocial]) {
     if (!nome) continue;
-    // Full slug (remove legal suffixes)
     const cleaned = normalize(nome)
-      .replace(/\b(ltda|s[\.\s]*a|eireli|me|epp|administradora|admin|gestao|servicos?|comercio|industria|do brasil|brasileira?)\b/gi, "")
+      .replace(/\b(ltda|s[\.\s]*a|eireli|me|epp|limitada?)\b/gi, "")
       .trim();
-    const fullSlug = cleaned.replace(/[^a-z0-9]/g, "").slice(0, 30);
+    
+    // Full slug without common words
+    const cleanedNoCommon = cleaned
+      .replace(/\b(administradora|admin|gestao|servicos?|comercio|industria|do brasil|brasileira?|de|do|da|dos|das|e)\b/gi, "")
+      .trim();
+    const fullSlug = cleanedNoCommon.replace(/[^a-z0-9]/g, "").slice(0, 30);
     if (fullSlug.length >= 3) {
       candidates.push(`${fullSlug}.com.br`);
       candidates.push(`${fullSlug}.com`);
     }
-    // First meaningful word (e.g. "Petrobras" from "Petroleo Brasileiro S.A. - Petrobras")
-    const words = cleaned.split(/[\s\-–]+/).filter(w => w.length >= 3 && w.replace(/[^a-z]/g, "").length >= 3);
-    for (const word of words) {
+
+    // Full slug WITH activity words (e.g. "pacocondominios")
+    const fullSlugWithActivity = cleaned.replace(/\b(de|do|da|dos|das|e|ltda|limitada?|s[\.\s]*a|eireli|me|epp)\b/gi, "").replace(/[^a-z0-9]/g, "").slice(0, 30);
+    if (fullSlugWithActivity.length >= 3 && fullSlugWithActivity !== fullSlug) {
+      candidates.push(`${fullSlugWithActivity}.com.br`);
+      candidates.push(`${fullSlugWithActivity}.com`);
+    }
+
+    // First meaningful words
+    const words = cleanedNoCommon.split(/[\s\-–]+/).filter(w => w.length >= 3 && w.replace(/[^a-z]/g, "").length >= 3);
+    for (const word of words.slice(0, 3)) {
       const w = word.replace(/[^a-z0-9]/g, "");
       if (w.length >= 3 && w !== fullSlug) {
         candidates.push(`${w}.com.br`);
         candidates.push(`${w}.com`);
+        // Combine first word with activity keywords (e.g., "pacco" + "condominios")
+        for (const kw of activityKeywords) {
+          const combo = `${w}${kw}`;
+          if (combo !== fullSlug && combo !== fullSlugWithActivity) {
+            candidates.push(`${combo}.com.br`);
+            candidates.push(`${combo}.com`);
+          }
+        }
       }
     }
   }
@@ -213,7 +236,42 @@ function generateCandidateDomains(empresaNome: string, cnpjData: Record<string, 
     }
   }
 
-  return [...new Set(candidates)].slice(0, 8);
+  return [...new Set(candidates)].slice(0, 12);
+}
+
+function extractActivityKeywords(cnpjData: Record<string, unknown> | null): string[] {
+  const keywords: string[] = [];
+  const atividadePrincipal = cnpjData?.atividade_principal as Array<{text?: string}> | undefined;
+  const razaoSocial = (cnpjData?.razao_social as string || "").toLowerCase();
+  
+  // Extract from activity description and razao social
+  const activityMap: Record<string, string> = {
+    "condomini": "condominios",
+    "imobili": "imoveis",
+    "imobiliaria": "imobiliaria",
+    "contabil": "contabil",
+    "contabilidade": "contabilidade",
+    "engenharia": "engenharia",
+    "construc": "construcao",
+    "incorpora": "incorporadora",
+    "segur": "seguros",
+    "financ": "financeira",
+    "tecnolog": "tech",
+    "consult": "consultoria",
+  };
+  
+  const textToSearch = [
+    razaoSocial,
+    ...(atividadePrincipal || []).map(a => (a.text || "").toLowerCase()),
+  ].join(" ");
+  
+  for (const [prefix, keyword] of Object.entries(activityMap)) {
+    if (textToSearch.includes(prefix)) {
+      keywords.push(keyword);
+    }
+  }
+  
+  return [...new Set(keywords)].slice(0, 3);
 }
 
 async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjData: Record<string, unknown> | null, skipCache = false): Promise<{ dominios: DominioInfo[]; firecrawlDomains: FirecrawlResult }> {
