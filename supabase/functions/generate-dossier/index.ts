@@ -127,7 +127,13 @@ async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
     };
   } catch (err) {
     console.warn(`[RDAP] Error for ${domain}:`, err);
-    // Fallback: try whois-like search via web
+    // Fallback: check if domain is alive via HTTP HEAD
+    try {
+      const headResp = await fetch(`https://${domain}`, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) });
+      if (headResp.ok || headResp.status === 301 || headResp.status === 302) {
+        return { dominio: domain, status: "active (HTTP)" };
+      }
+    } catch { /* ignore */ }
     return null;
   }
 }
