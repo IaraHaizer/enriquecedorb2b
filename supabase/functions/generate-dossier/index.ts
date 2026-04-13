@@ -68,8 +68,11 @@ interface DominioInfo {
 }
 
 async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
-  // Only query .br domains via registro.br RDAP
-  if (!domain.endsWith(".br")) return null;
+  // Choose RDAP endpoint based on TLD
+  const rdapUrl = domain.endsWith(".br")
+    ? `https://rdap.registro.br/domain/${domain}`
+    : `https://rdap.org/domain/${domain}`;
+  
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
