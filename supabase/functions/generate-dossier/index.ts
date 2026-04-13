@@ -382,38 +382,45 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
   }
 
   // Score and filter domains by relevance to the company
+  // Common geographic/generic words that shouldn't match alone
+  const genericWords = new Set(["rio", "sao", "preto", "nova", "belo", "sul", "norte", "grande", "campo", "porto"]);
+  
   const companyWords = empresaNome.toLowerCase()
     .replace(/[^a-z\s]/g, "")
     .split(/\s+/)
-    .filter(w => w.length >= 3 && !["ltda", "limitada", "administradora", "gestao", "servicos"].includes(w));
+    .filter(w => w.length >= 3 && !["ltda", "limitada", "administradora", "gestao", "servicos", "empresa"].includes(w));
   
   const activityWords = extractActivityKeywords(cnpjData);
+  const significantWords = companyWords.filter(w => !genericWords.has(w));
   const allRelevantWords = [...companyWords, ...activityWords];
   
   const scoreDomain = (d: DominioInfo): number => {
-    const domName = d.dominio.replace(/\.(com|net|org|com\.br|net\.br)$/i, "").toLowerCase();
+    const domName = d.dominio.replace(/\.(com|net|org|com\.br|net\.br)$/i, "").replace(/^www\./, "").toLowerCase();
     let score = 0;
-    // Bonus for matching company words
+    let significantMatches = 0;
+    
     for (const w of allRelevantWords) {
-      if (domName.includes(w)) score += 10;
+      if (domName.includes(w)) {
+        score += genericWords.has(w) ? 2 : 10;
+        if (!genericWords.has(w)) significantMatches++;
+      }
     }
     // Bonus for CNPJ match in registrant
     if (d.cnpj_registrante && cnpj && d.cnpj_registrante.replace(/\D/g, "") === cnpj.replace(/\D/g, "")) score += 50;
-    // Penalty for generic/unrelated domains
-    if (domName.length <= 3) score -= 5;
+    // Require at least one significant word match (not just "rio" or "preto")
+    if (significantMatches === 0 && score < 50) score = 0;
     // Bonus for .br
     if (d.dominio.endsWith(".br")) score += 2;
     return score;
   };
   
-  // Filter out domains with zero relevance (no matching words at all)
   const scoredDomains = rdapResults
     .map(d => ({ domain: d, score: scoreDomain(d) }))
     .filter(d => d.score > 0)
     .sort((a, b) => b.score - a.score);
   
   const filteredDomains = scoredDomains.map(d => d.domain);
-  console.log(`[Domains] Found ${filteredDomains.length} relevant domains (filtered from ${rdapResults.length})`);
+  console.log(`[Domains] Found ${filteredDomains.length} relevant domains (filtered from ${rdapResults.length}): ${filteredDomains.map(d => `${d.dominio}(${scoredDomains.find(s => s.domain === d)?.score})`).join(", ")}`);
 
   return { dominios: filteredDomains, firecrawlDomains: firecrawlResult };
 }
