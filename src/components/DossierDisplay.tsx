@@ -620,12 +620,23 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
             </div>
           )}
           <Separator />
-          <div>
-            <span className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+          <div className="rounded-lg border-2 border-red-500/50 p-4">
+            <span className="text-xs text-red-500 uppercase tracking-wider flex items-center gap-1 font-semibold">
               <AlertTriangle className="h-3 w-3" /> O que Evitar
             </span>
-            <p className="text-sm mt-1 text-destructive/80">{insights_estrategicos.o_que_evitar}</p>
+            <p className="text-sm mt-1">{insights_estrategicos.o_que_evitar}</p>
           </div>
+          {insights_estrategicos.contexto_regional && (
+            <>
+              <Separator />
+              <div className="rounded-lg border border-border/50 bg-secondary/30 p-4">
+                <span className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                  <MapPin className="h-3 w-3" /> Contexto Regional
+                </span>
+                <p className="text-sm mt-1">{insights_estrategicos.contexto_regional}</p>
+              </div>
+            </>
+          )}
         </div>
       </SectionCard>
 

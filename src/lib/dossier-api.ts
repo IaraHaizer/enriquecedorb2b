@@ -96,6 +96,7 @@ export interface Dossier {
       ponto_de_dor: string;
     }>;
     o_que_evitar: string;
+    contexto_regional?: string;
   };
   logica_group_software: {
     analise_fit: string;
