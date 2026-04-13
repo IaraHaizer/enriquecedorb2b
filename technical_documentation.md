@@ -8,6 +8,7 @@ graph TD
     A[Frontend React/Vite] -->|Invokes| B[Supabase Edge Function]
     B -->|Fetch CNPJ| C[BrasilAPI]
     B -->|Search/Scrape| D[Firecrawl API]
+    B -->|Enrichment| H[Apollo.io API]
     B -->|AI Generation| E[Gemini AI / Lovable Gateway]
     B -->|Store History| F[Supabase Database]
     A -->|Auth| G[Supabase Auth]
@@ -24,10 +25,11 @@ graph TD
 - **Gerenciamento de Estado/Cache**: React Query (@tanstack/react-query).
 - **Roteamento**: React Router DOM v6.
 
-### Backend (Supabase)
-- **Edge Functions**: Funções Deno escritas em TypeScript.
-- **Banco de Dados**: PostgreSQL com suporte a JSONB para armazenar os dossiês.
-- **Autenticação**: Supabase Auth (Email/Senha).
+### APIs Externas
+- **BrasilAPI**: Dados de CNPJ e QSA.
+- **Firecrawl**: Busca na web e scraping de sites.
+- **Apollo.io**: Enriquecimento de e-mails corporativos, cargos e LinkedIn.
+- **Lovable AI Gateway**: Acesso ao modelo Gemini 2.5 Flash.
 
 ---
 
@@ -42,7 +44,10 @@ A função `generate-dossier` (`supabase/functions/generate-dossier/index.ts`) i
 4.  **Enriquecimento (Firecrawl)**: 
     - Realiza buscas na web por notícias, processos judiciais, Reclame Aqui e sinais de crescimento.
     - Realiza o **Scraping do site da empresa** (se encontrado) para extrair tecnologias e portfólio.
-5.  **Síntese por IA**: Envia o contexto consolidado (Receita + Web + Site) para a IA gerar o dossiê final.
+5.  **Enriquecimento Apollo (Match Seguro)**:
+    - Cruza o domínio validado (via CNPJ/WHOIS) com o nome do sócio ou input original.
+    - Extrai e-mails validados, cargos precisos e links sociais.
+6.  **Síntese por IA**: Envia o contexto consolidado (Receita + Apollo + Web + Site) para a IA gerar o dossiê final.
 
 ---
 
@@ -82,4 +87,5 @@ VITE_SUPABASE_PUBLISHABLE_KEY=...
 A função de borda requer os seguintes segredos configurados no Supabase:
 - `FIRECRAWL_API_KEY`: Para buscas e scraping.
 - `LOVABLE_API_KEY`: Para acesso à IA (Gemini).
+- `APOLLO_API_KEY`: Chave da API do Apollo.io para enriquecimento.
 - `SUPABASE_SERVICE_ROLE_KEY`: Para operações administrativas de banco de dados.

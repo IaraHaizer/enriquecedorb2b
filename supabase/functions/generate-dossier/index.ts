@@ -65,6 +65,8 @@ interface DominioInfo {
   registrante?: string;
   cnpj_registrante?: string;
   nameservers?: string[];
+  is_validated?: boolean;
+  score?: number;
 }
 
 async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
@@ -406,9 +408,12 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
       }
     }
     // Bonus for CNPJ match in registrant
-    if (d.cnpj_registrante && cnpj && d.cnpj_registrante.replace(/\D/g, "") === cnpj.replace(/\D/g, "")) score += 50;
-    // Require at least one significant word match (not just "rio" or "preto")
-    if (significantMatches === 0 && score < 50) score = 0;
+    if (d.cnpj_registrante && cnpj && d.cnpj_registrante.replace(/\D/g, "") === cnpj.replace(/\D/g, "")) {
+      score += 100; // Aumentado para garantir prioridade absoluta
+      d.is_validated = true;
+    }
+    // Requirement check for Apollo: require at least one significant word match or CNPJ match
+    if (significantMatches === 0 && !d.is_validated && score < 50) score = 0;
     // Bonus for .br
     if (d.dominio.endsWith(".br")) score += 2;
     return score;
@@ -477,6 +482,49 @@ async function firecrawlSearch(query: string, sourceName: string, options?: { li
   } catch (err) {
     console.warn(`[Firecrawl] ${sourceName} error:`, err);
     return { source: sourceName, query, results: [], error: String(err) };
+  }
+}
+
+async function fetchApolloEnrichment(options: { 
+  firstName?: string; 
+  lastName?: string; 
+  email?: string; 
+  domain?: string; 
+}): Promise<Record<string, unknown> | null> {
+  const apiKey = Deno.env.get("APOLLO_API_KEY");
+  if (!apiKey) {
+    console.warn("[Apollo] API key not configured");
+    return null;
+  }
+
+  try {
+    console.log(`[Apollo] Enriching: ${options.email || `${options.firstName} ${options.lastName} @ ${options.domain}`}`);
+    const response = await fetch("https://api.apollo.io/v1/people/match", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "X-Api-Key": apiKey,
+      },
+      body: JSON.stringify({
+        first_name: options.firstName,
+        last_name: options.lastName,
+        email: options.email,
+        domain: options.domain,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.warn(`[Apollo] Error ${response.status}: ${errText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return (data.person as Record<string, unknown>) || null;
+  } catch (err) {
+    console.warn("[Apollo] Fetch error:", err);
+    return null;
   }
 }
 
@@ -1097,6 +1145,54 @@ serve(async (req) => {
     console.log(`External sources found: ${externalSourcesFound.join(", ") || "none"}`);
     console.log(`Domains found: ${domainData.dominios.length}`);
 
+    // === NEW: Apollo Enrichment ===
+    let apolloData: Record<string, unknown> | null = null;
+    let personFirstName = "";
+    let personLastName = "";
+    const personEmail = input_type === "email" ? (input as string) : undefined;
+
+    if (input_type === "nome") {
+      const parts = (input as string).trim().split(/\s+/);
+      personFirstName = parts[0];
+      personLastName = parts.slice(1).join(" ");
+    } else if (cnpjDataRef?.qsa && Array.isArray(cnpjDataRef.qsa) && cnpjDataRef.qsa.length > 0) {
+      const socioName = (cnpjDataRef.qsa[0].nome as string) || "";
+      const parts = socioName.trim().split(/\s+/);
+      personFirstName = parts[0];
+      personLastName = parts.slice(1).join(" ");
+    }
+
+    const mainDomainObj = domainData.dominios[0];
+    const mainDomain = mainDomainObj?.dominio;
+    const isDomainValidated = mainDomainObj?.is_validated;
+    const domainScore = mainDomainObj?.score || 0;
+
+    // Call Apollo if we have a validated domain OR an email OR if it's a high-score candidate
+    if (personEmail || (mainDomain && (isDomainValidated || domainScore >= 110))) {
+      apolloData = await fetchApolloEnrichment({
+        firstName: personFirstName || undefined,
+        lastName: personLastName || undefined,
+        email: personEmail,
+        domain: mainDomain,
+      });
+
+      if (apolloData) {
+        console.log(`[Apollo] Successfully enriched: ${apolloData.first_name} ${apolloData.last_name}`);
+      }
+    }
+
+    let apolloContext = "";
+    if (apolloData) {
+      apolloContext = `\n=== DADOS ENRIQUECIDOS APOLLO (SOCIO/CONTATO) ===\n` +
+        `Nome: ${apolloData.first_name} ${apolloData.last_name}\n` +
+        `Cargo: ${apolloData.title || apolloData.job_title || "Não informado"}\n` +
+        `LinkedIn: ${apolloData.linkedin_url || "Não informado"}\n` +
+        `Twitter: ${apolloData.twitter_url || "Não informado"}\n` +
+        `E-mail Corporativo: ${apolloData.email || "Não informado"}\n` +
+        `Status E-mail: ${apolloData.email_status || "Não informado"}\n` +
+        (apolloData.organization ? `Empresa no Apollo: ${(apolloData.organization as any).name}\n` : "");
+    }
+
     // Scrape the company website for rich content
     let websiteContent = "";
     if (domainData.dominios.length > 0) {
@@ -1141,6 +1237,7 @@ Tipo de input: ${input_type}
 Dado fornecido: ${input}
 ${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa → CNPJ) ===${cascadeContext}\n=== FIM CASCATA ===` : ""}
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
+${apolloContext ? `\n${apolloContext}\n\nUse os dados do Apollo acima para preencher contatos_abordagem e validar o LinkedIn do sócio principal.` : ""}
 ${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual.` : ""}
 ${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online. Se houver CONTEÚDO DO SITE, analise-o profundamente para extrair: serviços oferecidos, portfólio de condomínios/imóveis, equipe, diferenciais, tecnologias usadas, e qualquer informação que enriqueça o dossiê e a abordagem comercial.` : ""}
 
