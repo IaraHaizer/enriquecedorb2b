@@ -68,8 +68,11 @@ interface DominioInfo {
 }
 
 async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
-  // Only query .br domains via registro.br RDAP
-  if (!domain.endsWith(".br")) return null;
+  // Choose RDAP endpoint based on TLD
+  const rdapUrl = domain.endsWith(".br")
+    ? `https://rdap.registro.br/domain/${domain}`
+    : `https://rdap.org/domain/${domain}`;
+  
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
@@ -124,7 +127,13 @@ async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
     };
   } catch (err) {
     console.warn(`[RDAP] Error for ${domain}:`, err);
-    // Fallback: try whois-like search via web
+    // Fallback: check if domain is alive via HTTP HEAD
+    try {
+      const headResp = await fetch(`https://${domain}`, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) });
+      if (headResp.ok || headResp.status === 301 || headResp.status === 302) {
+        return { dominio: domain, status: "active (HTTP)" };
+      }
+    } catch { /* ignore */ }
     return null;
   }
 }
@@ -183,24 +192,47 @@ function generateCandidateDomains(empresaNome: string, cnpjData: Record<string, 
     .replace(/[àáâãä]/g, "a").replace(/[èéêë]/g, "e").replace(/[ìíîï]/g, "i")
     .replace(/[òóôõö]/g, "o").replace(/[ùúûü]/g, "u").replace(/[ç]/g, "c");
 
+  // Activity-related keywords to combine with the company name
+  const activityKeywords = extractActivityKeywords(cnpjData);
+
   for (const nome of [nomeFantasia, razaoSocial]) {
     if (!nome) continue;
-    // Full slug (remove legal suffixes)
     const cleaned = normalize(nome)
-      .replace(/\b(ltda|s[\.\s]*a|eireli|me|epp|administradora|admin|gestao|servicos?|comercio|industria|do brasil|brasileira?)\b/gi, "")
+      .replace(/\b(ltda|s[\.\s]*a|eireli|me|epp|limitada?)\b/gi, "")
       .trim();
-    const fullSlug = cleaned.replace(/[^a-z0-9]/g, "").slice(0, 30);
+    
+    // Full slug without common words
+    const cleanedNoCommon = cleaned
+      .replace(/\b(administradora|admin|gestao|servicos?|comercio|industria|do brasil|brasileira?|de|do|da|dos|das|e)\b/gi, "")
+      .trim();
+    const fullSlug = cleanedNoCommon.replace(/[^a-z0-9]/g, "").slice(0, 30);
     if (fullSlug.length >= 3) {
       candidates.push(`${fullSlug}.com.br`);
       candidates.push(`${fullSlug}.com`);
     }
-    // First meaningful word (e.g. "Petrobras" from "Petroleo Brasileiro S.A. - Petrobras")
-    const words = cleaned.split(/[\s\-–]+/).filter(w => w.length >= 3 && w.replace(/[^a-z]/g, "").length >= 3);
-    for (const word of words) {
+
+    // Full slug WITH activity words (e.g. "pacocondominios")
+    const fullSlugWithActivity = cleaned.replace(/\b(de|do|da|dos|das|e|ltda|limitada?|s[\.\s]*a|eireli|me|epp)\b/gi, "").replace(/[^a-z0-9]/g, "").slice(0, 30);
+    if (fullSlugWithActivity.length >= 3 && fullSlugWithActivity !== fullSlug) {
+      candidates.push(`${fullSlugWithActivity}.com.br`);
+      candidates.push(`${fullSlugWithActivity}.com`);
+    }
+
+    // First meaningful words
+    const words = cleanedNoCommon.split(/[\s\-–]+/).filter(w => w.length >= 3 && w.replace(/[^a-z]/g, "").length >= 3);
+    for (const word of words.slice(0, 3)) {
       const w = word.replace(/[^a-z0-9]/g, "");
       if (w.length >= 3 && w !== fullSlug) {
         candidates.push(`${w}.com.br`);
         candidates.push(`${w}.com`);
+        // Combine first word with activity keywords (e.g., "pacco" + "condominios")
+        for (const kw of activityKeywords) {
+          const combo = `${w}${kw}`;
+          if (combo !== fullSlug && combo !== fullSlugWithActivity) {
+            candidates.push(`${combo}.com.br`);
+            candidates.push(`${combo}.com`);
+          }
+        }
       }
     }
   }
@@ -213,7 +245,42 @@ function generateCandidateDomains(empresaNome: string, cnpjData: Record<string, 
     }
   }
 
-  return [...new Set(candidates)].slice(0, 8);
+  return [...new Set(candidates)].slice(0, 12);
+}
+
+function extractActivityKeywords(cnpjData: Record<string, unknown> | null): string[] {
+  const keywords: string[] = [];
+  const atividadePrincipal = cnpjData?.atividade_principal as Array<{text?: string}> | undefined;
+  const razaoSocial = (cnpjData?.razao_social as string || "").toLowerCase();
+  
+  // Extract from activity description and razao social
+  const activityMap: Record<string, string> = {
+    "condomini": "condominios",
+    "imobili": "imoveis",
+    "imobiliaria": "imobiliaria",
+    "contabil": "contabil",
+    "contabilidade": "contabilidade",
+    "engenharia": "engenharia",
+    "construc": "construcao",
+    "incorpora": "incorporadora",
+    "segur": "seguros",
+    "financ": "financeira",
+    "tecnolog": "tech",
+    "consult": "consultoria",
+  };
+  
+  const textToSearch = [
+    razaoSocial,
+    ...(atividadePrincipal || []).map(a => (a.text || "").toLowerCase()),
+  ].join(" ");
+  
+  for (const [prefix, keyword] of Object.entries(activityMap)) {
+    if (textToSearch.includes(prefix)) {
+      keywords.push(keyword);
+    }
+  }
+  
+  return [...new Set(keywords)].slice(0, 3);
 }
 
 async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjData: Record<string, unknown> | null, skipCache = false): Promise<{ dominios: DominioInfo[]; firecrawlDomains: FirecrawlResult }> {
@@ -223,27 +290,44 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
   // Query RDAP in parallel for candidate domains
   const rdapPromises = candidates.map((d) => fetchRdapDomain(d));
   
-  // Also search via Firecrawl for domains registered to this CNPJ
+  // Search 1: CNPJ-based WHOIS search
   const cleanCnpj = cnpj?.replace(/[^\d]/g, "") || "";
   const firecrawlQuery = cleanCnpj 
     ? `"${cleanCnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")}" domínio OR site OR whois registro.br`
     : `"${empresaNome}" domínio site oficial`;
   
+  // Search 2: Direct company website search (catches cases like pacocondominios.com)
+  const nomeFantasia = (cnpjData?.nome_fantasia as string) || "";
+  const searchName = nomeFantasia || empresaNome;
+  const siteSearchQuery = `"${searchName}" site oficial OR website`;
+  
   const cacheKey = buildCacheKey(empresaNome, cnpj, "dominios_whois");
+  const cacheKeySite = buildCacheKey(empresaNome, cnpj, "site_oficial");
   let firecrawlResult: FirecrawlResult;
+  let siteSearchResult: FirecrawlResult;
   
   if (!skipCache) {
-    const cached = await getCachedResult(cacheKey);
-    if (cached) {
-      firecrawlResult = cached;
-    } else {
-      firecrawlResult = await firecrawlSearch(firecrawlQuery, "dominios_whois", { limit: 5 });
-      await setCachedResult(cacheKey, firecrawlResult);
-    }
+    const [cached, cachedSite] = await Promise.all([
+      getCachedResult(cacheKey),
+      getCachedResult(cacheKeySite),
+    ]);
+    firecrawlResult = cached || await firecrawlSearch(firecrawlQuery, "dominios_whois", { limit: 5 });
+    siteSearchResult = cachedSite || await firecrawlSearch(siteSearchQuery, "site_oficial", { limit: 5 });
+    if (!cached) await setCachedResult(cacheKey, firecrawlResult);
+    if (!cachedSite) await setCachedResult(cacheKeySite, siteSearchResult);
   } else {
-    firecrawlResult = await firecrawlSearch(firecrawlQuery, "dominios_whois", { limit: 5 });
-    await setCachedResult(cacheKey, firecrawlResult);
+    [firecrawlResult, siteSearchResult] = await Promise.all([
+      firecrawlSearch(firecrawlQuery, "dominios_whois", { limit: 5 }),
+      firecrawlSearch(siteSearchQuery, "site_oficial", { limit: 5 }),
+    ]);
+    await Promise.all([
+      setCachedResult(cacheKey, firecrawlResult),
+      setCachedResult(cacheKeySite, siteSearchResult),
+    ]);
   }
+
+  // Combine all Firecrawl results
+  const allFirecrawlResults = [...firecrawlResult.results, ...siteSearchResult.results];
 
   let rdapResults = (await Promise.all(rdapPromises)).filter(Boolean) as DominioInfo[];
   
@@ -255,32 +339,90 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
     console.log(`[Domains] RDAP failed, scrape fallback found ${rdapResults.length} domains`);
   }
   
-  // Extract additional domains from Firecrawl results
-  const domainRegex = /([a-z0-9-]+\.(?:com|net|org|com\.br|net\.br|org\.br|inf\.br|adm\.br|imb\.br))\b/gi;
+  // Extract additional domains from Firecrawl results (both text and URLs)
+  const domainRegex = /([a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:com|net|org|com\.br|net\.br|org\.br|inf\.br|adm\.br|imb\.br))\b/gi;
   const extraDomains = new Set<string>();
-  for (const r of firecrawlResult.results) {
-    const text = `${r.title} ${r.description} ${r.markdown}`;
+  for (const r of allFirecrawlResults) {
+    const text = `${r.url || ""} ${r.title || ""} ${r.description || ""} ${r.markdown || ""}`;
     let match;
     while ((match = domainRegex.exec(text)) !== null) {
       const d = match[1].toLowerCase();
-      if (!d.match(/registro\.br|google|facebook|instagram|linkedin|twitter|youtube|whois/)) {
+      if (!d.match(/registro\.br|google|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame/)) {
         extraDomains.add(d);
       }
+    }
+    // Also extract domain from URL directly
+    if (r.url) {
+      try {
+        const urlDomain = new URL(r.url).hostname.replace(/^www\./, "");
+        if (!urlDomain.match(/google|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|registro\.br/)) {
+          extraDomains.add(urlDomain);
+        }
+      } catch { /* ignore */ }
     }
   }
 
   // RDAP lookup for extra domains found via Firecrawl
   const existingDomains = new Set(rdapResults.map(r => r.dominio.toLowerCase()));
-  const newDomains = [...extraDomains].filter(d => !existingDomains.has(d) && !candidates.includes(d)).slice(0, 3);
+  const newDomains = [...extraDomains].filter(d => !existingDomains.has(d) && !candidates.includes(d)).slice(0, 5);
   if (newDomains.length > 0) {
+    console.log(`[Domains] Extra domains from Firecrawl: ${newDomains.join(", ")}`);
     const extraRdap = await Promise.all(newDomains.map(d => fetchRdapDomain(d)));
     for (const r of extraRdap) {
       if (r) rdapResults.push(r);
     }
+    // Fallback scrape for .br extras
+    const failedBr = newDomains.filter((d, i) => !extraRdap[i] && d.endsWith(".br"));
+    if (failedBr.length > 0) {
+      const scrapeExtra = await Promise.all(failedBr.map(d => fetchWhoisViaScrape(d)));
+      for (const r of scrapeExtra) {
+        if (r) rdapResults.push(r);
+      }
+    }
   }
 
-  console.log(`[Domains] Found ${rdapResults.length} domains via RDAP`);
-  return { dominios: rdapResults, firecrawlDomains: firecrawlResult };
+  // Score and filter domains by relevance to the company
+  // Common geographic/generic words that shouldn't match alone
+  const genericWords = new Set(["rio", "sao", "preto", "nova", "belo", "sul", "norte", "grande", "campo", "porto"]);
+  
+  const companyWords = empresaNome.toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .split(/\s+/)
+    .filter(w => w.length >= 3 && !["ltda", "limitada", "administradora", "gestao", "servicos", "empresa"].includes(w));
+  
+  const activityWords = extractActivityKeywords(cnpjData);
+  const significantWords = companyWords.filter(w => !genericWords.has(w));
+  const allRelevantWords = [...companyWords, ...activityWords];
+  
+  const scoreDomain = (d: DominioInfo): number => {
+    const domName = d.dominio.replace(/\.(com|net|org|com\.br|net\.br)$/i, "").replace(/^www\./, "").toLowerCase();
+    let score = 0;
+    let significantMatches = 0;
+    
+    for (const w of allRelevantWords) {
+      if (domName.includes(w)) {
+        score += genericWords.has(w) ? 2 : 10;
+        if (!genericWords.has(w)) significantMatches++;
+      }
+    }
+    // Bonus for CNPJ match in registrant
+    if (d.cnpj_registrante && cnpj && d.cnpj_registrante.replace(/\D/g, "") === cnpj.replace(/\D/g, "")) score += 50;
+    // Require at least one significant word match (not just "rio" or "preto")
+    if (significantMatches === 0 && score < 50) score = 0;
+    // Bonus for .br
+    if (d.dominio.endsWith(".br")) score += 2;
+    return score;
+  };
+  
+  const scoredDomains = rdapResults
+    .map(d => ({ domain: d, score: scoreDomain(d) }))
+    .filter(d => d.score > 0)
+    .sort((a, b) => b.score - a.score);
+  
+  const filteredDomains = scoredDomains.map(d => d.domain);
+  console.log(`[Domains] Found ${filteredDomains.length} relevant domains (filtered from ${rdapResults.length}): ${filteredDomains.map(d => `${d.dominio}(${scoredDomains.find(s => s.domain === d)?.score})`).join(", ")}`);
+
+  return { dominios: filteredDomains, firecrawlDomains: firecrawlResult };
 }
 
 // ==================== FIRECRAWL SEARCH ====================
@@ -955,11 +1097,42 @@ serve(async (req) => {
     console.log(`External sources found: ${externalSourcesFound.join(", ") || "none"}`);
     console.log(`Domains found: ${domainData.dominios.length}`);
 
+    // Scrape the company website for rich content
+    let websiteContent = "";
+    if (domainData.dominios.length > 0) {
+      const mainDomain = domainData.dominios[0].dominio;
+      const websiteUrl = `https://www.${mainDomain}`;
+      console.log(`[Website] Scraping company website: ${websiteUrl}`);
+      try {
+        const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
+        if (apiKey) {
+          const scrapeResp = await fetch("https://api.firecrawl.dev/v1/scrape", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ url: websiteUrl, formats: ["markdown"], onlyMainContent: true, timeout: 10000 }),
+          });
+          if (scrapeResp.ok) {
+            const scrapeData = await scrapeResp.json();
+            const md = scrapeData?.data?.markdown || scrapeData?.markdown || "";
+            if (md.length > 50) {
+              websiteContent = md.slice(0, 3000);
+              console.log(`[Website] Scraped ${websiteContent.length} chars from ${websiteUrl}`);
+            }
+          } else {
+            console.warn(`[Website] Scrape failed with status ${scrapeResp.status}`);
+            await scrapeResp.text(); // consume body
+          }
+        }
+      } catch (err) {
+        console.warn(`[Website] Error scraping website:`, err);
+      }
+    }
+
     // Format domain context for AI
     const domainContext = domainData.dominios.length > 0
       ? `\n\n=== DOMÍNIOS ASSOCIADOS (WHOIS/RDAP registro.br) ===\n${domainData.dominios.map(d =>
         `- ${d.dominio} | Status: ${d.status} | Criado: ${d.data_criacao || "N/I"} | Expira: ${d.data_expiracao || "N/I"} | Registrante: ${d.registrante || "N/I"}${d.cnpj_registrante ? ` (CNPJ: ${d.cnpj_registrante})` : ""}${d.nameservers ? ` | NS: ${d.nameservers.join(", ")}` : ""}`
-      ).join("\n")}\n=== FIM DOMÍNIOS ===`
+      ).join("\n")}\n=== FIM DOMÍNIOS ===${websiteContent ? `\n\n=== CONTEÚDO DO SITE DA EMPRESA (${domainData.dominios[0].dominio}) ===\n${websiteContent}\n=== FIM CONTEÚDO SITE ===` : ""}`
       : "";
 
     // Call AI with all context
@@ -969,7 +1142,7 @@ Dado fornecido: ${input}
 ${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa → CNPJ) ===${cascadeContext}\n=== FIM CASCATA ===` : ""}
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
 ${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual.` : ""}
-${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online.` : ""}
+${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online. Se houver CONTEÚDO DO SITE, analise-o profundamente para extrair: serviços oferecidos, portfólio de condomínios/imóveis, equipe, diferenciais, tecnologias usadas, e qualquer informação que enriqueça o dossiê e a abordagem comercial.` : ""}
 
 LEMBRETE OBRIGATÓRIO:
 1. Na seção "logica_group_software", use ESTRITAMENTE os produtos dos catálogos Group Software e PartnerBank.
