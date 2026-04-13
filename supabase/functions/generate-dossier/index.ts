@@ -281,27 +281,44 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
   // Query RDAP in parallel for candidate domains
   const rdapPromises = candidates.map((d) => fetchRdapDomain(d));
   
-  // Also search via Firecrawl for domains registered to this CNPJ
+  // Search 1: CNPJ-based WHOIS search
   const cleanCnpj = cnpj?.replace(/[^\d]/g, "") || "";
   const firecrawlQuery = cleanCnpj 
     ? `"${cleanCnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")}" domínio OR site OR whois registro.br`
     : `"${empresaNome}" domínio site oficial`;
   
+  // Search 2: Direct company website search (catches cases like pacocondominios.com)
+  const nomeFantasia = (cnpjData?.nome_fantasia as string) || "";
+  const searchName = nomeFantasia || empresaNome;
+  const siteSearchQuery = `"${searchName}" site oficial OR website`;
+  
   const cacheKey = buildCacheKey(empresaNome, cnpj, "dominios_whois");
+  const cacheKeySite = buildCacheKey(empresaNome, cnpj, "site_oficial");
   let firecrawlResult: FirecrawlResult;
+  let siteSearchResult: FirecrawlResult;
   
   if (!skipCache) {
-    const cached = await getCachedResult(cacheKey);
-    if (cached) {
-      firecrawlResult = cached;
-    } else {
-      firecrawlResult = await firecrawlSearch(firecrawlQuery, "dominios_whois", { limit: 5 });
-      await setCachedResult(cacheKey, firecrawlResult);
-    }
+    const [cached, cachedSite] = await Promise.all([
+      getCachedResult(cacheKey),
+      getCachedResult(cacheKeySite),
+    ]);
+    firecrawlResult = cached || await firecrawlSearch(firecrawlQuery, "dominios_whois", { limit: 5 });
+    siteSearchResult = cachedSite || await firecrawlSearch(siteSearchQuery, "site_oficial", { limit: 5 });
+    if (!cached) await setCachedResult(cacheKey, firecrawlResult);
+    if (!cachedSite) await setCachedResult(cacheKeySite, siteSearchResult);
   } else {
-    firecrawlResult = await firecrawlSearch(firecrawlQuery, "dominios_whois", { limit: 5 });
-    await setCachedResult(cacheKey, firecrawlResult);
+    [firecrawlResult, siteSearchResult] = await Promise.all([
+      firecrawlSearch(firecrawlQuery, "dominios_whois", { limit: 5 }),
+      firecrawlSearch(siteSearchQuery, "site_oficial", { limit: 5 }),
+    ]);
+    await Promise.all([
+      setCachedResult(cacheKey, firecrawlResult),
+      setCachedResult(cacheKeySite, siteSearchResult),
+    ]);
   }
+
+  // Combine all Firecrawl results
+  const allFirecrawlResults = [...firecrawlResult.results, ...siteSearchResult.results];
 
   let rdapResults = (await Promise.all(rdapPromises)).filter(Boolean) as DominioInfo[];
   
@@ -313,31 +330,49 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
     console.log(`[Domains] RDAP failed, scrape fallback found ${rdapResults.length} domains`);
   }
   
-  // Extract additional domains from Firecrawl results
-  const domainRegex = /([a-z0-9-]+\.(?:com|net|org|com\.br|net\.br|org\.br|inf\.br|adm\.br|imb\.br))\b/gi;
+  // Extract additional domains from Firecrawl results (both text and URLs)
+  const domainRegex = /([a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:com|net|org|com\.br|net\.br|org\.br|inf\.br|adm\.br|imb\.br))\b/gi;
   const extraDomains = new Set<string>();
-  for (const r of firecrawlResult.results) {
-    const text = `${r.title} ${r.description} ${r.markdown}`;
+  for (const r of allFirecrawlResults) {
+    const text = `${r.url || ""} ${r.title || ""} ${r.description || ""} ${r.markdown || ""}`;
     let match;
     while ((match = domainRegex.exec(text)) !== null) {
       const d = match[1].toLowerCase();
-      if (!d.match(/registro\.br|google|facebook|instagram|linkedin|twitter|youtube|whois/)) {
+      if (!d.match(/registro\.br|google|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame/)) {
         extraDomains.add(d);
       }
+    }
+    // Also extract domain from URL directly
+    if (r.url) {
+      try {
+        const urlDomain = new URL(r.url).hostname.replace(/^www\./, "");
+        if (!urlDomain.match(/google|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|registro\.br/)) {
+          extraDomains.add(urlDomain);
+        }
+      } catch { /* ignore */ }
     }
   }
 
   // RDAP lookup for extra domains found via Firecrawl
   const existingDomains = new Set(rdapResults.map(r => r.dominio.toLowerCase()));
-  const newDomains = [...extraDomains].filter(d => !existingDomains.has(d) && !candidates.includes(d)).slice(0, 3);
+  const newDomains = [...extraDomains].filter(d => !existingDomains.has(d) && !candidates.includes(d)).slice(0, 5);
   if (newDomains.length > 0) {
+    console.log(`[Domains] Extra domains from Firecrawl: ${newDomains.join(", ")}`);
     const extraRdap = await Promise.all(newDomains.map(d => fetchRdapDomain(d)));
     for (const r of extraRdap) {
       if (r) rdapResults.push(r);
     }
+    // Fallback scrape for .br extras
+    const failedBr = newDomains.filter((d, i) => !extraRdap[i] && d.endsWith(".br"));
+    if (failedBr.length > 0) {
+      const scrapeExtra = await Promise.all(failedBr.map(d => fetchWhoisViaScrape(d)));
+      for (const r of scrapeExtra) {
+        if (r) rdapResults.push(r);
+      }
+    }
   }
 
-  console.log(`[Domains] Found ${rdapResults.length} domains via RDAP`);
+  console.log(`[Domains] Found ${rdapResults.length} domains total`);
   return { dominios: rdapResults, firecrawlDomains: firecrawlResult };
 }
 
