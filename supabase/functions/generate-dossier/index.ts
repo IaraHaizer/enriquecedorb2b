@@ -655,7 +655,8 @@ Estrutura do Output (JSON rigoroso):
     "ressonancia_por_perfil": [
       { "socio": "string", "ponto_de_dor": "string" }
     ],
-    "o_que_evitar": "string"
+    "o_que_evitar": "string",
+    "contexto_regional": "string — análise do contexto regional/geográfico do lead: particularidades do mercado local, presença da Group/PartnerBank na região, concorrentes regionais, cultura de negócios local, oportunidades específicas da UF/cidade. Inclua dados como: quantos condomínios/imobiliárias existem na região, se é capital ou interior, sazonalidade, eventos do setor na região, associações locais (ABADI, SECOVI regional, etc.), e como usar isso a favor da abordagem comercial."
   },
   "logica_group_software": {
     "analise_fit": "string",
