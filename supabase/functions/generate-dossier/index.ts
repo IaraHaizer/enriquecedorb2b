@@ -101,7 +101,8 @@ async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
     for (const entity of entities) {
       const roles = (entity.roles || []) as string[];
       if (roles.includes("registrant")) {
-        const vcardArray = (entity.vcardArray || [])[1] as Array<unknown[]> | undefined;
+        const vcardRaw = entity.vcardArray as unknown[] | undefined;
+        const vcardArray = (vcardRaw && vcardRaw.length > 1 ? vcardRaw[1] : undefined) as Array<unknown[]> | undefined;
         if (vcardArray) {
           for (const field of vcardArray) {
             if (field[0] === "fn") registrante = String(field[3] || "");
