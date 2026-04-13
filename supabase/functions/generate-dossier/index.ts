@@ -627,21 +627,46 @@ async function setCachedResult(cacheKey: string, result: FirecrawlResult): Promi
   }
 }
 
-async function fetchExternalSources(empresaNome: string, cnpj?: string | null, skipCache = false): Promise<FirecrawlResult[]> {
+function cleanCompanyNameForSearch(name: string): string {
+  if (!name) return "";
+  const normalize = (s: string) => s
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove accents
+
+  return normalize(name)
+    .replace(/\b(ltda|s\.?a\.?|eireli|me|epp|limitada?|despachos|assessoria|administracao|gestao|condominios?|imobiliaria|servicos?|comercio|industria|do brasil|brasileira?|de|do|da|dos|das|e)\b/gi, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function fetchExternalSources(
+  empresaNome: string,
+  nomeFantasia?: string,
+  dominio?: string,
+  cnpj?: string | null,
+  skipCache = false
+): Promise<FirecrawlResult[]> {
   const searchName = empresaNome || cnpj || "";
   if (!searchName) return [];
 
+  const cleanedName = cleanCompanyNameForSearch(empresaNome);
+  const cleanedFantasia = nomeFantasia ? cleanCompanyNameForSearch(nomeFantasia) : "";
+  const brandName = cleanedFantasia || cleanedName || searchName;
+
+  // Build a smart query for LinkedIn
+  const linkedinQuery = dominio 
+    ? `("${brandName}" OR "${dominio}") site:linkedin.com/company`
+    : `("${brandName}" OR "${empresaNome}") site:linkedin.com/company`;
+
   const sources = [
-    { name: "reclame_aqui", query: `"${searchName}" site:reclameaqui.com.br`, opts: { limit: 3 } },
-    { name: "jusbrasil_escavador", query: `"${searchName}" site:jusbrasil.com.br OR site:escavador.com`, opts: { limit: 3 } },
-    { name: "linkedin", query: `"${searchName}" site:linkedin.com/company`, opts: { limit: 3 } },
-    { name: "google_news", query: `"${searchName}" notícias empresa`, opts: { limit: 3, tbs: "qdr:y" } },
-    // NEW: Risk/financial sources
-    { name: "protestos_negativacoes", query: `"${searchName}" protesto negativação OR serasa OR "boa vista" OR SCPC`, opts: { limit: 3 } },
-    // NEW: Growth signals - hiring/expansion
-    { name: "vagas_crescimento", query: `"${searchName}" vagas OR contratando OR expansão OR "novo empreendimento"`, opts: { limit: 3, tbs: "qdr:m" } },
-    // NEW: Tech stack detection
-    { name: "tech_stack", query: `"${searchName}" ERP OR sistema OR software OR "super lógica" OR superlógica OR condomob OR MyCond OR "uau" OR "cidade inteligente"`, opts: { limit: 3 } },
+    { name: "reclame_aqui", query: `"${brandName}" site:reclameaqui.com.br`, opts: { limit: 3 } },
+    { name: "jusbrasil_escavador", query: `"${brandName}" (site:jusbrasil.com.br OR site:escavador.com)`, opts: { limit: 3 } },
+    { name: "linkedin", query: linkedinQuery, opts: { limit: 5 } }, // increased limit for LinkedIn
+    { name: "google_news", query: `"${brandName}" notícias`, opts: { limit: 3, tbs: "qdr:y" } },
+    { name: "protestos_negativacoes", query: `"${brandName}" protesto OR negativação OR serasa`, opts: { limit: 3 } },
+    { name: "vagas_crescimento", query: `"${brandName}" vagas OR contratando OR expansão`, opts: { limit: 3, tbs: "qdr:m" } },
+    { name: "tech_stack", query: `"${brandName}" ERP OR software OR superlógica OR condomob`, opts: { limit: 3 } },
   ];
 
   const results = await Promise.all(
@@ -1202,16 +1227,21 @@ serve(async (req) => {
       empresaNome = input as string;
     }
 
-    // Fetch external sources and domain info in parallel
-    console.log(`Fetching external sources and domains...${skip_cache ? " (cache ignorado)" : ""}`);
-    const [externalResults, domainData] = await Promise.all([
-      fetchExternalSources(empresaNome, cnpj, !!skip_cache),
-      fetchDomainInfo(empresaNome, cnpj, cnpjDataRef, !!skip_cache),
-    ]);
+    // === SEQUENTIAL ENRICHMENT ===
+    // 1. Fetch domain info first to use the domain in external searches
+    console.log(`[Enrichment] Fetching domains...${skip_cache ? " (cache ignorado)" : ""}`);
+    const domainData = await fetchDomainInfo(empresaNome, cnpj, cnpjDataRef, !!skip_cache);
+    const mainDomain = domainData.dominios[0]?.dominio;
+    console.log(`[Enrichment] Domains found: ${domainData.dominios.length}${mainDomain ? ` (Main: ${mainDomain})` : ""}`);
+
+    // 2. Fetch external sources using cleaned names and found domain
+    console.log(`[Enrichment] Fetching external sources...`);
+    const nomeFantasia = cnpjDataRef?.nome_fantasia as string;
+    const externalResults = await fetchExternalSources(empresaNome, nomeFantasia, mainDomain, cnpj, !!skip_cache);
+    
     const externalContext = formatExternalContext(externalResults);
     const externalSourcesFound = externalResults.filter((r) => r.results.length > 0).map((r) => r.source);
-    console.log(`External sources found: ${externalSourcesFound.join(", ") || "none"}`);
-    console.log(`Domains found: ${domainData.dominios.length}`);
+    console.log(`[Enrichment] External sources found: ${externalSourcesFound.join(", ") || "none"}`);
 
     // === NEW: Apollo Enrichment ===
     let apolloData: Record<string, unknown> | null = null;
@@ -1231,7 +1261,6 @@ serve(async (req) => {
     }
 
     const mainDomainObj = domainData.dominios[0];
-    const mainDomain = mainDomainObj?.dominio;
     const isDomainValidated = mainDomainObj?.is_validated;
     const domainScore = mainDomainObj?.score || 0;
 
@@ -1278,8 +1307,7 @@ serve(async (req) => {
 
     // Scrape the company website for rich content
     let websiteContent = "";
-    if (domainData.dominios.length > 0) {
-      const mainDomain = domainData.dominios[0].dominio;
+    if (mainDomain) {
       const websiteUrl = `https://www.${mainDomain}`;
       console.log(`[Website] Scraping company website: ${websiteUrl}`);
       try {
