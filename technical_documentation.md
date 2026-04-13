@@ -9,6 +9,7 @@ graph TD
     B -->|Fetch CNPJ| C[BrasilAPI]
     B -->|Search/Scrape| D[Firecrawl API]
     B -->|Enrichment| H[Apollo.io API]
+    B -->|Socioeconomics| I[IBGE API]
     B -->|AI Generation| E[Gemini AI / Lovable Gateway]
     B -->|Store History| F[Supabase Database]
     A -->|Auth| G[Supabase Auth]
@@ -26,9 +27,10 @@ graph TD
 - **Roteamento**: React Router DOM v6.
 
 ### APIs Externas
-- **BrasilAPI**: Dados de CNPJ e QSA.
+- **BrasilAPI**: Dados de CNPJ, QSA e Códigos Município.
 - **Firecrawl**: Busca na web e scraping de sites.
 - **Apollo.io**: Enriquecimento de e-mails corporativos, cargos e LinkedIn.
+- **IBGE**: Dados de PIB e População Municipal (API de Agregados/SIDRA).
 - **Lovable AI Gateway**: Acesso ao modelo Gemini 2.5 Flash.
 
 ---
@@ -47,7 +49,10 @@ A função `generate-dossier` (`supabase/functions/generate-dossier/index.ts`) i
 5.  **Enriquecimento Apollo (Match Seguro)**:
     - Cruza o domínio validado (via CNPJ/WHOIS) com o nome do sócio ou input original.
     - Extrai e-mails validados, cargos precisos e links sociais.
-6.  **Síntese por IA**: Envia o contexto consolidado (Receita + Apollo + Web + Site) para a IA gerar o dossiê final.
+6.  **Enriquecimento Socioeconômico (IBGE)**:
+    - Utiliza o código do município para buscar PIB e População.
+    - Ajuda a IA a contextualizar o poder de compra regional e ticket médio.
+7.  **Síntese por IA**: Envia o contexto consolidado (Receita + Apollo + IBGE + Web + Site) para a IA gerar o dossiê final.
 
 ---
 

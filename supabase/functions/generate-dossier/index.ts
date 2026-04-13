@@ -529,6 +529,51 @@ async function fetchApolloEnrichment(options: {
   }
 }
 
+async function fetchIbgeData(codigoIbge: string): Promise<Record<string, unknown> | null> {
+  if (!codigoIbge) return null;
+  const cleanCode = codigoIbge.replace(/\D/g, "");
+  if (cleanCode.length < 6) return null;
+  
+  try {
+    console.log(`[IBGE] Fetching data for N6: ${cleanCode}`);
+    
+    const popUrl = `https://servicodados.ibge.gov.br/api/v3/agregados/9514/periodos/-1/variaveis/93?localidades=N6[${cleanCode}]`;
+    const pibUrl = `https://servicodados.ibge.gov.br/api/v3/agregados/5938/periodos/-1/variaveis/37?localidades=N6[${cleanCode}]`;
+
+    const [popResp, pibResp] = await Promise.all([
+      fetch(popUrl).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(pibUrl).then(r => r.ok ? r.json() : null).catch(() => null)
+    ]);
+
+    const result: Record<string, any> = {};
+
+    if (popResp && Array.isArray(popResp) && popResp[0]?.resultados?.[0]?.series?.[0]?.serie) {
+      const series = popResp[0].resultados[0].series[0].serie;
+      const years = Object.keys(series).sort().reverse();
+      const lastYear = years[0];
+      if (lastYear) {
+        result.populacao = series[lastYear];
+        result.populacao_ano = lastYear;
+      }
+    }
+
+    if (pibResp && Array.isArray(pibResp) && pibResp[0]?.resultados?.[0]?.series?.[0]?.serie) {
+      const series = pibResp[0].resultados[0].series[0].serie;
+      const years = Object.keys(series).sort().reverse();
+      const lastYear = years[0];
+      if (lastYear) {
+        result.pib = series[lastYear];
+        result.pib_ano = lastYear;
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : null;
+  } catch (err) {
+    console.warn("[IBGE] Error fetching data:", err);
+    return null;
+  }
+}
+
 function getSupabaseAdmin() {
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -1194,6 +1239,21 @@ serve(async (req) => {
         (apolloData.organization ? `Empresa no Apollo: ${(apolloData.organization as any).name}\n` : "");
     }
 
+    // === NEW: IBGE Enrichment ===
+    let ibgeData: Record<string, any> | null = null;
+    const codigoIbge = cnpjDataRef?.codigo_municipio_ibge as string;
+    if (codigoIbge) {
+      ibgeData = await fetchIbgeData(codigoIbge);
+    }
+
+    let ibgeContext = "";
+    if (ibgeData) {
+      ibgeContext = `\n=== DADOS SOCIOECONÔMICOS MUNICIPAIS (IBGE) ===\n` +
+        `Município: ${cnpjDataRef?.municipio || "N/I"}/${cnpjDataRef?.uf || "N/I"}\n` +
+        (ibgeData.populacao ? `População: ${Number(ibgeData.populacao).toLocaleString("pt-BR")} habitantes (${ibgeData.populacao_ano})\n` : "") +
+        (ibgeData.pib ? `PIB Municipal: R$ ${Number(ibgeData.pib).toLocaleString("pt-BR")} mil (${ibgeData.pib_ano})\n` : "");
+    }
+
     // Scrape the company website for rich content
     let websiteContent = "";
     if (domainData.dominios.length > 0) {
@@ -1239,6 +1299,7 @@ Dado fornecido: ${input}
 ${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa → CNPJ) ===${cascadeContext}\n=== FIM CASCATA ===` : ""}
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
 ${apolloContext ? `\n${apolloContext}\n\nUse os dados do Apollo acima para preencher contatos_abordagem e validar o LinkedIn do sócio principal.` : ""}
+${ibgeContext ? `\n${ibgeContext}\n\nUse os dados do IBGE para fornecer "contexto_regional" e estimar o ticket médio dos condomínios na região.` : ""}
 ${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual.` : ""}
 ${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online. Se houver CONTEÚDO DO SITE, analise-o profundamente para extrair: serviços oferecidos, portfólio de condomínios/imóveis, equipe, diferenciais, tecnologias usadas, e qualquer informação que enriqueça o dossiê e a abordagem comercial.` : ""}
 
