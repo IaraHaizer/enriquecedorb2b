@@ -1048,11 +1048,42 @@ serve(async (req) => {
     console.log(`External sources found: ${externalSourcesFound.join(", ") || "none"}`);
     console.log(`Domains found: ${domainData.dominios.length}`);
 
+    // Scrape the company website for rich content
+    let websiteContent = "";
+    if (domainData.dominios.length > 0) {
+      const mainDomain = domainData.dominios[0].dominio;
+      const websiteUrl = `https://www.${mainDomain}`;
+      console.log(`[Website] Scraping company website: ${websiteUrl}`);
+      try {
+        const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
+        if (apiKey) {
+          const scrapeResp = await fetch("https://api.firecrawl.dev/v1/scrape", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ url: websiteUrl, formats: ["markdown"], onlyMainContent: true, timeout: 10000 }),
+          });
+          if (scrapeResp.ok) {
+            const scrapeData = await scrapeResp.json();
+            const md = scrapeData?.data?.markdown || scrapeData?.markdown || "";
+            if (md.length > 50) {
+              websiteContent = md.slice(0, 3000);
+              console.log(`[Website] Scraped ${websiteContent.length} chars from ${websiteUrl}`);
+            }
+          } else {
+            console.warn(`[Website] Scrape failed with status ${scrapeResp.status}`);
+            await scrapeResp.text(); // consume body
+          }
+        }
+      } catch (err) {
+        console.warn(`[Website] Error scraping website:`, err);
+      }
+    }
+
     // Format domain context for AI
     const domainContext = domainData.dominios.length > 0
       ? `\n\n=== DOMÍNIOS ASSOCIADOS (WHOIS/RDAP registro.br) ===\n${domainData.dominios.map(d =>
         `- ${d.dominio} | Status: ${d.status} | Criado: ${d.data_criacao || "N/I"} | Expira: ${d.data_expiracao || "N/I"} | Registrante: ${d.registrante || "N/I"}${d.cnpj_registrante ? ` (CNPJ: ${d.cnpj_registrante})` : ""}${d.nameservers ? ` | NS: ${d.nameservers.join(", ")}` : ""}`
-      ).join("\n")}\n=== FIM DOMÍNIOS ===`
+      ).join("\n")}\n=== FIM DOMÍNIOS ===${websiteContent ? `\n\n=== CONTEÚDO DO SITE DA EMPRESA (${domainData.dominios[0].dominio}) ===\n${websiteContent}\n=== FIM CONTEÚDO SITE ===` : ""}`
       : "";
 
     // Call AI with all context
