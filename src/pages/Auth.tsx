@@ -27,8 +27,8 @@ export default function Auth() {
         if (error) throw error;
         toast.success("Conta criada! Você já pode acessar a ferramenta.");
       }
-    } catch (error: any) {
-      toast.error(error.message || "Tente novamente");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Tente novamente");
     } finally {
       setLoading(false);
     }

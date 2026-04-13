@@ -198,7 +198,7 @@ function generateCandidateDomains(empresaNome: string, cnpjData: Record<string, 
   for (const nome of [nomeFantasia, razaoSocial]) {
     if (!nome) continue;
     const cleaned = normalize(nome)
-      .replace(/\b(ltda|s[\.\s]*a|eireli|me|epp|limitada?)\b/gi, "")
+      .replace(/\b(ltda|s[. ]*a|eireli|me|epp|limitada?)\b/gi, "")
       .trim();
     
     // Full slug without common words
@@ -212,7 +212,7 @@ function generateCandidateDomains(empresaNome: string, cnpjData: Record<string, 
     }
 
     // Full slug WITH activity words (e.g. "pacocondominios")
-    const fullSlugWithActivity = cleaned.replace(/\b(de|do|da|dos|das|e|ltda|limitada?|s[\.\s]*a|eireli|me|epp)\b/gi, "").replace(/[^a-z0-9]/g, "").slice(0, 30);
+    const fullSlugWithActivity = cleaned.replace(/\b(de|do|da|dos|das|e|ltda|limitada?|s[. ]*a|eireli|me|epp)\b/gi, "").replace(/[^a-z0-9]/g, "").slice(0, 30);
     if (fullSlugWithActivity.length >= 3 && fullSlugWithActivity !== fullSlug) {
       candidates.push(`${fullSlugWithActivity}.com.br`);
       candidates.push(`${fullSlugWithActivity}.com`);
@@ -865,7 +865,7 @@ function calculateLeadScore(
   if (anos >= 5) maturidade += 10;
   else if (anos >= 2) maturidade += 7;
   else if (anos >= 1) maturidade += 4;
-  const capitalStr = empresa.capital_social?.replace(/[^\d,\.]/g, "") || "0";
+  const capitalStr = empresa.capital_social?.replace(/[^\d,.]/g, "") || "0";
   const capital = parseFloat(capitalStr.replace(/\./g, "").replace(",", ".")) || 0;
   if (capital >= 100000) maturidade += 5;
   else if (capital >= 10000) maturidade += 3;

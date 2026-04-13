@@ -11,7 +11,7 @@ interface DossierFormProps {
 }
 
 function detectInputType(value: string): InputType {
-  const cleaned = value.replace(/[\s.\-\/]/g, "");
+  const cleaned = value.replace(/[\s.\-/]/g, "");
   if (value.includes("@")) return "email";
   if (/^\d{14}$/.test(cleaned) || /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(value.trim())) return "cnpj";
   return "nome";
