@@ -365,11 +365,19 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
               {dominios_associados.map((d, i) => (
                 <TableRow key={i}>
                   <TableCell className="font-medium">
-                    <a href={`https://${d.dominio}`} target="_blank" rel="noopener noreferrer"
-                      className="text-primary hover:underline flex items-center gap-1">
-                      <Globe className="h-3 w-3" />
-                      {d.dominio}
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a href={`https://${d.dominio}`} target="_blank" rel="noopener noreferrer"
+                        className="text-primary hover:underline flex items-center gap-1">
+                        <Globe className="h-3 w-3" />
+                        {d.dominio}
+                      </a>
+                      {d.is_validated && (
+                        <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] px-1.5 py-0 font-normal gap-1" title="Propriedade confirmada via CNPJ no WHOIS">
+                          <Shield className="h-2.5 w-2.5" />
+                          Validado
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge className={d.status.includes("active") ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-muted text-muted-foreground"} variant="outline">
@@ -568,7 +576,17 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
                       {c.canal}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm">{c.contato}</TableCell>
+                  <TableCell className="text-sm">
+                    <div className="flex items-center gap-2">
+                      {c.contato}
+                      {c.is_apollo_verified && (
+                        <Badge className="bg-sky-500/15 text-sky-400 border-sky-500/30 text-[10px] px-1.5 py-0 font-normal gap-1" title="E-mail verificado via Apollo.io">
+                          <Sparkles className="h-2.5 w-2.5" />
+                          Verificado
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -634,6 +652,22 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
                   <MapPin className="h-3 w-3" /> Contexto Regional
                 </span>
                 <p className="text-sm mt-1">{insights_estrategicos.contexto_regional}</p>
+                {insights_estrategicos.ibge_data && (
+                  <div className="mt-3 grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">População (IBGE)</span>
+                      <p className="text-sm font-semibold text-primary">
+                        {insights_estrategicos.ibge_data.populacao ? `${Number(insights_estrategicos.ibge_data.populacao).toLocaleString("pt-BR")} hab.` : "N/I"}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">PIB Municipal (IBGE)</span>
+                      <p className="text-sm font-semibold text-primary">
+                        {insights_estrategicos.ibge_data.pib ? `R$ ${Number(insights_estrategicos.ibge_data.pib).toLocaleString("pt-BR")} mil` : "N/I"}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}

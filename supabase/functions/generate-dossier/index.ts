@@ -1381,6 +1381,22 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
     // Inject domain data directly into dossier (not AI-generated)
     dossier.dominios_associados = domainData.dominios;
 
+    // Inject IBGE raw data into insights
+    if (ibgeData) {
+      if (!dossier.insights_estrategicos) dossier.insights_estrategicos = {};
+      dossier.insights_estrategicos.ibge_data = ibgeData;
+    }
+
+    // Tag Apollo verified contacts
+    if (apolloData && apolloData.email && dossier.contatos_abordagem) {
+      dossier.contatos_abordagem = (dossier.contatos_abordagem as any[]).map(c => {
+        if (c.contato === apolloData.email) {
+          return { ...c, is_apollo_verified: true };
+        }
+        return c;
+      });
+    }
+
     // Calculate lead qualification score V2 (now includes domain data)
     const lead_score = calculateLeadScore(dossier, cnpjDataFound, externalResults);
 

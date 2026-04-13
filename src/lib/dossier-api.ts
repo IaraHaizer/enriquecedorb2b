@@ -29,6 +29,7 @@ export interface ContatoAbordagem {
   cargo: string;
   canal: string;
   contato: string;
+  is_apollo_verified?: boolean;
 }
 
 export interface RiscoFinanceiro {
@@ -51,6 +52,8 @@ export interface DominioAssociado {
   registrante?: string;
   cnpj_registrante?: string;
   nameservers?: string[];
+  is_validated?: boolean;
+  score?: number;
 }
 
 export interface Dossier {
@@ -97,6 +100,12 @@ export interface Dossier {
     }>;
     o_que_evitar: string;
     contexto_regional?: string;
+    ibge_data?: {
+      populacao?: string;
+      populacao_ano?: string;
+      pib?: string;
+      pib_ano?: string;
+    };
   };
   logica_group_software: {
     analise_fit: string;

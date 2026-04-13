@@ -47,12 +47,12 @@ A função `generate-dossier` (`supabase/functions/generate-dossier/index.ts`) i
     - Realiza buscas na web por notícias, processos judiciais, Reclame Aqui e sinais de crescimento.
     - Realiza o **Scraping do site da empresa** (se encontrado) para extrair tecnologias e portfólio.
 5.  **Enriquecimento Apollo (Match Seguro)**:
-    - Cruza o domínio validado (via CNPJ/WHOIS) com o nome do sócio ou input original.
-    - Extrai e-mails validados, cargos precisos e links sociais.
+    - **O Quê**: Consulta a API do Apollo.io para e-mails e cargos reais.
+    - **Por Quê**: Reduzir a dependência de e-mails genéricos de sócios da Receita Federal e garantir que os dados de contato sejam verificados para abordagem imediata.
 6.  **Enriquecimento Socioeconômico (IBGE)**:
-    - Utiliza o código do município para buscar PIB e População.
-    - Ajuda a IA a contextualizar o poder de compra regional e ticket médio.
-7.  **Síntese por IA**: Envia o contexto consolidado (Receita + Apollo + IBGE + Web + Site) para a IA gerar o dossiê final.
+    - **O Quê**: Busca de dados de PIB e População Municipal via API SIDRA.
+    - **Por Quê**: Fornece contexto regional para a IA precificar serviços e estimar o ticket médio de condomínios na região (ex: PIB alto = maior potencial para módulos premium).
+7.  **Síntese por IA**: Envia o contexto consolidado (Receita + Apollo + IBGE + Web + Site) para a IA gerar o dossiê final com novos indicadores de validação cruzada.
 
 ---
 
@@ -75,8 +75,10 @@ Implementada em `src/lib/lead-scoring.ts`, a lógica calcula a pontuação com b
 - **Dados Cadastrais**: Até 20 pontos.
 - **Maturidade (Ano + Capital)**: Até 15 pontos.
 - **Presença Digital (Domínios + Redes)**: Até 15 pontos.
-- **Saúde Financeira**: Até 10 pontos (dedutivo baseado em nível de risco).
-- **Fit Tecnológico**: Até 10 pontos (concorrentes diretos aumentam o score de oportunidade).
+- **Saúde Financeira**: Até 10 pontos.
+- **Fit Tecnológico**: Até 10 pontos.
+- **Validação Cruzada**: Até 10 pontos (Bônus por domínio validado via CNPJ no WHOIS e contatos verificados via Apollo).
+- **Sinais de Crescimento**: Até 10 pontos.
 
 ---
 
