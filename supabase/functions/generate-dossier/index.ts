@@ -589,6 +589,13 @@ TECNOLOGIA ATUAL (empresa.tecnologia_atual):
 - Identifique se a empresa já usa algum ERP/software (Superlógica, Condomob, MyCond, UAU, etc.).
 - Se não identificar, escreva "Não identificado".
 
+CONTEXTO REGIONAL (insights_estrategicos.contexto_regional):
+- Com base no endereço/UF/cidade do lead, forneça inteligência regional rica e acionável.
+- Inclua: tamanho estimado do mercado local (condomínios, imobiliárias), se é capital ou interior, presença da Group Software na região (ex: "sede em BH, forte atuação em MG"), concorrentes regionais ativos, associações do setor (SECOVI, ABADI, AABIC, etc.), eventos/feiras do setor na região, cultura de negócios local, sazonalidade relevante.
+- Use esses dados para sugerir abordagens contextualizadas: ex: "Lead mineiro — reforce a autoridade de 28 anos no estado. Somos líderes absolutos em Minas Gerais."
+- Se o lead for de uma região onde a Group tem menor presença, sugira estratégia de entrada.
+- NUNCA deixe vazio. Mesmo com poucos dados, infira do endereço da Receita Federal.
+
 ESTRUTURA DO "logica_group_software" NO OUTPUT:
 - "analise_fit": Um parágrafo explicando POR QUE o produto X da Group/PartnerBank resolve a dor Y do lead.
 - "modulos_sugeridos": Lista com nomes EXATOS dos produtos conforme aparecem nos catálogos (ex: "Group Condomínios", "Automação de Boletos PartnerBank", "Condomínio Garantido PartnerBank").
