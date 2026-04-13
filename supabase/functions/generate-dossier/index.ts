@@ -959,11 +959,24 @@ function calculateLeadScore(
   if (anos >= 5) maturidade += 10;
   else if (anos >= 2) maturidade += 7;
   else if (anos >= 1) maturidade += 4;
+  
   const capitalStr = empresa.capital_social?.replace(/[^\d,.]/g, "") || "0";
   const capital = parseFloat(capitalStr.replace(/\./g, "").replace(",", ".")) || 0;
   if (capital >= 100000) maturidade += 5;
   else if (capital >= 10000) maturidade += 3;
-  breakdown.push({ categoria: "Maturidade", pontos: maturidade, max: 15, detalhe: `${anos} anos, Capital: ${empresa.capital_social || "N/I"}` });
+
+  // Regional Bonus (IBGE)
+  const ibge = (dossier.insights_estrategicos as any)?.ibge_data;
+  if (ibge) {
+    const pib = parseFloat(ibge.pib || "0");
+    const pop = parseInt(ibge.populacao || "0");
+    if (pib > 10000000 || pop > 200000) { // PIB > 10bi ou Pop > 200k
+      maturidade += 2;
+    }
+  }
+
+  maturidade = Math.min(15, maturidade);
+  breakdown.push({ categoria: "Maturidade", pontos: maturidade, max: 15, detalhe: `${anos} anos, Capital: ${empresa.capital_social || "N/I"}${ibge ? " + Bônus Regional" : ""}` });
 
   // 3. Complexidade societária (0-10)
   let societaria = 0;
@@ -1035,6 +1048,15 @@ function calculateLeadScore(
   const vagasResult = externalResults.find(r => r.source === "vagas_crescimento");
   if (vagasResult && vagasResult.results.length > 0) crescimento = Math.min(10, crescimento + 2);
   breakdown.push({ categoria: "Sinais de Crescimento", pontos: crescimento, max: 10, detalhe: sinaisPositivos > 0 ? `${sinaisPositivos} sinal(is) positivo(s)` : "Sem sinais identificados" });
+
+  // 10. NEW: Validação Cruzada (0-10)
+  let validacao = 0;
+  const contatos = (dossier.contatos_abordagem || []) as Array<Record<string, any>>;
+  const hasApollo = contatos.some(c => c.is_apollo_verified);
+  const hasValidatedDomain = dominios.some(d => d.is_validated);
+  if (hasApollo) validacao += 5;
+  if (hasValidatedDomain) validacao += 5;
+  breakdown.push({ categoria: "Validação Cruzada", pontos: validacao, max: 10, detalhe: `${hasApollo ? "Contatos Apollo verificado(s)" : ""} ${hasValidatedDomain ? "Domínio validado via WHOIS" : ""}`.trim() || "Nenhuma validação extra" });
 
   const total = breakdown.reduce((s, b) => s + b.pontos, 0);
   const max = 130;

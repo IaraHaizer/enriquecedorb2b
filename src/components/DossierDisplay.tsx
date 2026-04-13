@@ -186,7 +186,7 @@ function LeadScoreWidget({ score }: { score: LeadScore }) {
               className="text-xs text-primary flex items-center gap-1 hover:underline"
             >
               {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              {expanded ? "Ocultar detalhes" : "Ver detalhes (9 dimensões)"}
+              {expanded ? "Ocultar detalhes" : "Ver detalhes (10 dimensões)"}
             </button>
           </div>
         </div>

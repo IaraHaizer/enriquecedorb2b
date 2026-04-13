@@ -40,7 +40,26 @@ export function calcScoreV2(d: Dossier): ScoreResult {
     const v = parseFloat(e.capital_social.replace(/[^\d,]/g, "").replace(",", "."));
     maturidade += v > 1000000 ? 5 : v > 100000 ? 3 : 1;
   }
-  breakdown.push({ categoria: "Maturidade", pontos: Math.min(maturidade, 15), max: 15, detalhe: `${e?.abertura || "?"}, Capital: ${e?.capital_social || "?"}` });
+
+  // Regional Bonus (IBGE)
+  const ibge = d.insights_estrategicos?.ibge_data;
+  let regionalBonus = false;
+  if (ibge) {
+    const pib = parseFloat(ibge.pib || "0");
+    const pop = parseInt(ibge.populacao || "0");
+    if (pib > 10000000 || pop > 200000) {
+      maturidade += 2;
+      regionalBonus = true;
+    }
+  }
+
+  maturidade = Math.min(maturidade, 15);
+  breakdown.push({ 
+    categoria: "Maturidade", 
+    pontos: maturidade, 
+    max: 15, 
+    detalhe: `${e?.abertura || "?"}, Capital: ${e?.capital_social || "?"}${regionalBonus ? " + Bônus Regional" : ""}` 
+  });
 
   // 3. Estrutura Societária (max 10)
   const numSocios = d.mapeamento_socios?.length || 0;
@@ -106,6 +125,20 @@ export function calcScoreV2(d: Dossier): ScoreResult {
   const negativos = sinais.filter((s) => s.tipo === "negativo").length;
   crescimento = Math.min(positivos * 4, 10) - Math.min(negativos * 2, 5);
   breakdown.push({ categoria: "Sinais de Crescimento", pontos: Math.max(0, Math.min(crescimento, 10)), max: 10, detalhe: `${positivos} positivo(s), ${negativos} negativo(s)` });
+
+  // 10. Validação Cruzada (max 10) — NEW V2 Refined
+  let validacao = 0;
+  const contatos = d.contatos_abordagem || [];
+  const hasApollo = contatos.some(c => c.is_apollo_verified);
+  const hasValidatedDomain = dominios.some(d => d.is_validated);
+  if (hasApollo) validacao += 5;
+  if (hasValidatedDomain) validacao += 5;
+  breakdown.push({ 
+    categoria: "Validação Cruzada", 
+    pontos: validacao, 
+    max: 10, 
+    detalhe: `${hasApollo ? "Apollo verificado" : ""} ${hasValidatedDomain ? "Domínio validado" : ""}`.trim() || "Nenhuma validação extra" 
+  });
 
   const total = breakdown.reduce((s, b) => s + b.pontos, 0);
   return {

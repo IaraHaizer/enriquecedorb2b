@@ -1,0 +1,13 @@
+{
+  "deno.enable": true,
+  "deno.lint": true,
+  "deno.unstable": true,
+  "deno.suggest.imports.hosts": {
+    "https://deno.land": true,
+    "https://esm.sh": true
+  },
+  // Isso garante que o Deno só atue dentro da pasta de funções do Supabase
+  "deno.enablePaths": [
+    "supabase/functions"
+  ]
+}
