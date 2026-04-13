@@ -381,8 +381,41 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
     }
   }
 
-  console.log(`[Domains] Found ${rdapResults.length} domains total`);
-  return { dominios: rdapResults, firecrawlDomains: firecrawlResult };
+  // Score and filter domains by relevance to the company
+  const companyWords = empresaNome.toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .split(/\s+/)
+    .filter(w => w.length >= 3 && !["ltda", "limitada", "administradora", "gestao", "servicos"].includes(w));
+  
+  const activityWords = extractActivityKeywords(cnpjData);
+  const allRelevantWords = [...companyWords, ...activityWords];
+  
+  const scoreDomain = (d: DominioInfo): number => {
+    const domName = d.dominio.replace(/\.(com|net|org|com\.br|net\.br)$/i, "").toLowerCase();
+    let score = 0;
+    // Bonus for matching company words
+    for (const w of allRelevantWords) {
+      if (domName.includes(w)) score += 10;
+    }
+    // Bonus for CNPJ match in registrant
+    if (d.cnpj_registrante && cnpj && d.cnpj_registrante.replace(/\D/g, "") === cnpj.replace(/\D/g, "")) score += 50;
+    // Penalty for generic/unrelated domains
+    if (domName.length <= 3) score -= 5;
+    // Bonus for .br
+    if (d.dominio.endsWith(".br")) score += 2;
+    return score;
+  };
+  
+  // Filter out domains with zero relevance (no matching words at all)
+  const scoredDomains = rdapResults
+    .map(d => ({ domain: d, score: scoreDomain(d) }))
+    .filter(d => d.score > 0)
+    .sort((a, b) => b.score - a.score);
+  
+  const filteredDomains = scoredDomains.map(d => d.domain);
+  console.log(`[Domains] Found ${filteredDomains.length} relevant domains (filtered from ${rdapResults.length})`);
+
+  return { dominios: filteredDomains, firecrawlDomains: firecrawlResult };
 }
 
 // ==================== FIRECRAWL SEARCH ====================
