@@ -64,6 +64,7 @@ interface DominioInfo {
   data_expiracao?: string;
   registrante?: string;
   cnpj_registrante?: string;
+  email_registrante?: string;
   nameservers?: string[];
   is_validated?: boolean;
   score?: number;
@@ -97,6 +98,7 @@ async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
 
     let registrante = "";
     let cnpjReg = "";
+    let emailReg = "";
     const entities = (data.entities || []) as Array<Record<string, unknown>>;
     for (const entity of entities) {
       const roles = (entity.roles || []) as string[];
@@ -106,6 +108,10 @@ async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
         if (vcardArray) {
           for (const field of vcardArray) {
             if (field[0] === "fn") registrante = String(field[3] || "");
+            if (field[0] === "email") {
+              const emailVal = field[3];
+              emailReg = Array.isArray(emailVal) ? String(emailVal[0] || "") : String(emailVal || "");
+            }
           }
         }
         const publicIds = (entity.publicIds || []) as Array<{ identifier: string; type: string }>;
@@ -126,6 +132,7 @@ async function fetchRdapDomain(domain: string): Promise<DominioInfo | null> {
       data_expiracao: expiration?.eventDate?.split("T")[0],
       registrante: registrante || undefined,
       cnpj_registrante: cnpjReg || undefined,
+      email_registrante: emailReg || undefined,
       nameservers: nameservers.length > 0 ? nameservers : undefined,
     };
   } catch (err) {
@@ -662,7 +669,11 @@ async function fetchExternalSources(
   const sources = [
     { name: "reclame_aqui", query: `"${brandName}" site:reclameaqui.com.br`, opts: { limit: 3 } },
     { name: "jusbrasil_escavador", query: `"${brandName}" (site:jusbrasil.com.br OR site:escavador.com)`, opts: { limit: 3 } },
-    { name: "linkedin", query: linkedinQuery, opts: { limit: 5 } }, // increased limit for LinkedIn
+    { name: "linkedin", query: linkedinQuery, opts: { limit: 5 } },
+    { name: "instagram", query: `"${brandName}" site:instagram.com`, opts: { limit: 3 } },
+    { name: "facebook", query: `"${brandName}" site:facebook.com`, opts: { limit: 3 } },
+    { name: "youtube", query: `"${brandName}" site:youtube.com`, opts: { limit: 2 } },
+    { name: "twitter_x", query: `"${brandName}" site:twitter.com OR site:x.com`, opts: { limit: 2 } },
     { name: "google_news", query: `"${brandName}" notícias`, opts: { limit: 3, tbs: "qdr:y" } },
     { name: "protestos_negativacoes", query: `"${brandName}" protesto OR negativação OR serasa`, opts: { limit: 3 } },
     { name: "vagas_crescimento", query: `"${brandName}" vagas OR contratando OR expansão`, opts: { limit: 3, tbs: "qdr:m" } },
@@ -684,6 +695,33 @@ async function fetchExternalSources(
   );
 
   return results;
+}
+
+function extractSocialLinksFromMarkdown(markdown: string): string[] {
+  if (!markdown) return [];
+  const socialPatterns = [
+    /https?:\/\/(?:www\.)?facebook\.com\/[a-zA-Z0-9._-]+/gi,
+    /https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9._-]+/gi,
+    /https?:\/\/(?:www\.)?linkedin\.com\/(?:company|in)\/[a-zA-Z0-9._-]+/gi,
+    /https?:\/\/(?:www\.)?youtube\.com\/(?:user|channel|c)\/[a-zA-Z0-9._-]+/gi,
+    /https?:\/\/(?:www\.)?twitter\.com\/[a-zA-Z0-9._-]+/gi,
+    /https?:\/\/(?:www\.)?x\.com\/[a-zA-Z0-9._-]+/gi,
+  ];
+
+  const links = new Set<string>();
+  for (const pattern of socialPatterns) {
+    const matches = markdown.match(pattern);
+    if (matches) {
+      matches.forEach(link => {
+        // Basic cleanup
+        const clean = link.replace(/[.,;]$/, "").split(/[?#]/)[0];
+        if (!clean.match(/login|share|privacy|terms|policies/i)) {
+          links.add(clean);
+        }
+      });
+    }
+  }
+  return [...links];
 }
 
 function formatExternalContext(results: FirecrawlResult[]): string {
@@ -899,6 +937,10 @@ Estrutura do Output (JSON rigoroso):
     "reclame_aqui": { "encontrado": true, "resumo": "string", "url": "string" },
     "processos_judiciais": { "encontrado": true, "resumo": "string", "url": "string" },
     "linkedin": { "encontrado": true, "resumo": "string", "url": "string" },
+    "instagram": { "encontrado": true, "resumo": "string", "url": "string" },
+    "facebook": { "encontrado": true, "resumo": "string", "url": "string" },
+    "youtube": { "encontrado": true, "resumo": "string", "url": "string" },
+    "twitter": { "encontrado": true, "resumo": "string", "url": "string" },
     "noticias": { "encontrado": true, "resumo": "string", "urls": ["string"] }
   },
   "risco_financeiro": {
@@ -1305,8 +1347,9 @@ serve(async (req) => {
         (ibgeData.pib ? `PIB Municipal: R$ ${Number(ibgeData.pib).toLocaleString("pt-BR")} mil (${ibgeData.pib_ano})\n` : "");
     }
 
-    // Scrape the company website for rich content
+    // Scrape the company website for rich content AND social links
     let websiteContent = "";
+    let extractedSocialLinks: string[] = [];
     if (mainDomain) {
       const websiteUrl = `https://www.${mainDomain}`;
       console.log(`[Website] Scraping company website: ${websiteUrl}`);
@@ -1324,6 +1367,10 @@ serve(async (req) => {
             if (md.length > 50) {
               websiteContent = md.slice(0, 3000);
               console.log(`[Website] Scraped ${websiteContent.length} chars from ${websiteUrl}`);
+              extractedSocialLinks = extractSocialLinksFromMarkdown(md);
+              if (extractedSocialLinks.length > 0) {
+                console.log(`[Website] Extracted ${extractedSocialLinks.length} social links from site`);
+              }
             }
           } else {
             console.warn(`[Website] Scrape failed with status ${scrapeResp.status}`);
@@ -1338,8 +1385,8 @@ serve(async (req) => {
     // Format domain context for AI
     const domainContext = domainData.dominios.length > 0
       ? `\n\n=== DOMÍNIOS ASSOCIADOS (WHOIS/RDAP registro.br) ===\n${domainData.dominios.map(d =>
-        `- ${d.dominio} | Status: ${d.status} | Criado: ${d.data_criacao || "N/I"} | Expira: ${d.data_expiracao || "N/I"} | Registrante: ${d.registrante || "N/I"}${d.cnpj_registrante ? ` (CNPJ: ${d.cnpj_registrante})` : ""}${d.nameservers ? ` | NS: ${d.nameservers.join(", ")}` : ""}`
-      ).join("\n")}\n=== FIM DOMÍNIOS ===${websiteContent ? `\n\n=== CONTEÚDO DO SITE DA EMPRESA (${domainData.dominios[0].dominio}) ===\n${websiteContent}\n=== FIM CONTEÚDO SITE ===` : ""}`
+        `- ${d.dominio} | Status: ${d.status} | Criado: ${d.data_criacao || "N/I"} | Expira: ${d.data_expiracao || "N/I"} | Registrante: ${d.registrante || "N/I"}${d.email_registrante ? ` (Email: ${d.email_registrante})` : ""}${d.cnpj_registrante ? ` (CNPJ: ${d.cnpj_registrante})` : ""}${d.nameservers ? ` | NS: ${d.nameservers.join(", ")}` : ""}`
+      ).join("\n")}\n=== FIM DOMÍNIOS ===${websiteContent ? `\n\n=== CONTEÚDO DO SITE DA EMPRESA (${domainData.dominios[0].dominio}) ===\n${websiteContent}\n=== FIM CONTEÚDO SITE ===` : ""}${extractedSocialLinks.length > 0 ? `\n\n=== LINKS DE REDES SOCIAIS ENCONTRADOS NO SITE ===\n${extractedSocialLinks.join("\n")}\n` : ""}`
       : "";
 
     // Call AI with all context

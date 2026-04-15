@@ -21,6 +21,10 @@ export interface FontesExternas {
   reclame_aqui?: FonteExterna;
   processos_judiciais?: FonteExterna;
   linkedin?: FonteExterna;
+  instagram?: FonteExterna;
+  facebook?: FonteExterna;
+  youtube?: FonteExterna;
+  twitter?: FonteExterna;
   noticias?: FonteExterna;
 }
 
@@ -51,6 +55,7 @@ export interface DominioAssociado {
   data_expiracao?: string;
   registrante?: string;
   cnpj_registrante?: string;
+  email_registrante?: string;
   nameservers?: string[];
   is_validated?: boolean;
   score?: number;

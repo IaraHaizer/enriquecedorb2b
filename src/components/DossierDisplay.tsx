@@ -4,7 +4,7 @@ import {
   MessageSquare, AlertTriangle, Package, Database, Sparkles,
   Search, Scale, Newspaper, ExternalLink, TrendingUp, ChevronDown, ChevronUp,
   Shield, AlertCircle, PhoneCall, Mail, Cpu, ArrowUpRight, ArrowDownRight, Minus,
-  Link2, Server, Calendar
+  Link2, Server, Calendar, Facebook, Instagram, Youtube, Twitter
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,7 @@ interface DossierDisplayProps {
   leadScore?: LeadScore | null;
 }
 
-function SourceBadge({ source }: { source: "receita" | "ia" | "firecrawl" | "reclame_aqui" | "jusbrasil" | "linkedin" | "noticias" }) {
+function SourceBadge({ source }: { source: "receita" | "ia" | "firecrawl" | "reclame_aqui" | "jusbrasil" | "linkedin" | "instagram" | "facebook" | "youtube" | "twitter" | "noticias" }) {
   const configs: Record<string, { bg: string; text: string; border: string; icon: typeof Database; label: string }> = {
     receita: { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30", icon: Database, label: "Receita Federal" },
     ia: { bg: "bg-violet-500/15", text: "text-violet-400", border: "border-violet-500/30", icon: Sparkles, label: "Análise IA" },
@@ -30,6 +30,10 @@ function SourceBadge({ source }: { source: "receita" | "ia" | "firecrawl" | "rec
     reclame_aqui: { bg: "bg-red-500/15", text: "text-red-400", border: "border-red-500/30", icon: MessageSquare, label: "Reclame Aqui" },
     jusbrasil: { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/30", icon: Scale, label: "JusBrasil" },
     linkedin: { bg: "bg-sky-500/15", text: "text-sky-400", border: "border-sky-500/30", icon: Linkedin, label: "LinkedIn" },
+    instagram: { bg: "bg-pink-500/15", text: "text-pink-400", border: "border-pink-500/30", icon: Instagram, label: "Instagram" },
+    facebook: { bg: "bg-blue-600/15", text: "text-blue-500", border: "border-blue-600/30", icon: Facebook, label: "Facebook" },
+    youtube: { bg: "bg-red-600/15", text: "text-red-500", border: "border-red-600/30", icon: Youtube, label: "YouTube" },
+    twitter: { bg: "bg-slate-500/15", text: "text-slate-400", border: "border-slate-500/30", icon: Twitter, label: "X / Twitter" },
     noticias: { bg: "bg-amber-500/15", text: "text-amber-400", border: "border-amber-500/30", icon: Newspaper, label: "Notícias" },
   };
   const c = configs[source] || configs.ia;
@@ -107,7 +111,7 @@ function FonteExternaCard({ title, icon: Icon, fonte, badgeSource }: {
   title: string;
   icon: typeof MessageSquare;
   fonte?: { encontrado: boolean; resumo: string; url?: string; urls?: string[] };
-  badgeSource: "reclame_aqui" | "jusbrasil" | "linkedin" | "noticias";
+  badgeSource: "reclame_aqui" | "jusbrasil" | "linkedin" | "instagram" | "facebook" | "youtube" | "twitter" | "noticias";
 }) {
   if (!fonte || !fonte.encontrado) return null;
   const urls = fonte.urls || (fonte.url ? [fonte.url] : []);
@@ -296,13 +300,25 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
                   {dataSources.fontes_externas!.includes("linkedin") && (
                     <div className="flex items-center gap-1.5">
                       <SourceBadge source="linkedin" />
-                      <span>Firecrawl Search</span>
+                      <span>LinkedIn</span>
+                    </div>
+                  )}
+                  {dataSources.fontes_externas!.includes("instagram") && (
+                    <div className="flex items-center gap-1.5">
+                      <SourceBadge source="instagram" />
+                      <span>Instagram</span>
+                    </div>
+                  )}
+                  {dataSources.fontes_externas!.includes("facebook") && (
+                    <div className="flex items-center gap-1.5">
+                      <SourceBadge source="facebook" />
+                      <span>Facebook</span>
                     </div>
                   )}
                   {dataSources.fontes_externas!.includes("google_news") && (
                     <div className="flex items-center gap-1.5">
                       <SourceBadge source="noticias" />
-                      <span>Firecrawl Search</span>
+                      <span>Notícias</span>
                     </div>
                   )}
                 </>
@@ -395,6 +411,12 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
                     {d.cnpj_registrante && (
                       <span className="block text-[10px] text-muted-foreground">CNPJ: {d.cnpj_registrante}</span>
                     )}
+                    {d.email_registrante && (
+                      <span className="block text-[10px] text-primary flex items-center gap-1 mt-0.5">
+                        <Mail className="h-2.5 w-2.5" />
+                        {d.email_registrante}
+                      </span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -463,6 +485,10 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
             <FonteExternaCard title="Reclame Aqui" icon={MessageSquare} fonte={fontes_externas?.reclame_aqui} badgeSource="reclame_aqui" />
             <FonteExternaCard title="Processos Judiciais" icon={Scale} fonte={fontes_externas?.processos_judiciais} badgeSource="jusbrasil" />
             <FonteExternaCard title="LinkedIn" icon={Linkedin} fonte={fontes_externas?.linkedin} badgeSource="linkedin" />
+            <FonteExternaCard title="Instagram" icon={Instagram} fonte={fontes_externas?.instagram} badgeSource="instagram" />
+            <FonteExternaCard title="Facebook" icon={Facebook} fonte={fontes_externas?.facebook} badgeSource="facebook" />
+            <FonteExternaCard title="YouTube" icon={Youtube} fonte={fontes_externas?.youtube} badgeSource="youtube" />
+            <FonteExternaCard title="Twitter / X" icon={Twitter} fonte={fontes_externas?.twitter} badgeSource="twitter" />
             <FonteExternaCard title="Notícias Recentes" icon={Newspaper} fonte={fontes_externas?.noticias} badgeSource="noticias" />
           </div>
         </SectionCard>
