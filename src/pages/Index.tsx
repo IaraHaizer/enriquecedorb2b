@@ -5,7 +5,7 @@ import { DossierDisplay } from "@/components/DossierDisplay";
 
 import { toast } from "sonner";
 import { generateDossier, type Dossier, type DataSources, type LeadScore, type InputType } from "@/lib/dossier-api";
-import { Crosshair, RotateCcw, LogOut, RefreshCw, Search, BarChart3, History } from "lucide-react";
+import { Radar, RotateCcw, LogOut, RefreshCw, Search, BarChart3, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppNavLink } from "@/components/AppNavLink";
 import { useAuth } from "@/hooks/useAuth";
@@ -70,11 +70,11 @@ export default function Index() {
         <div className="container max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Crosshair className="h-5 w-5 text-primary" />
+              <Radar className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-lg font-heading font-bold tracking-tight">Intel B2B</h1>
-              <p className="text-xs text-muted-foreground">Inteligência Comercial · Group Software</p>
+              <h1 className="text-lg font-heading font-bold tracking-tight">Group Radar</h1>
+              <p className="text-xs text-muted-foreground">Inteligência Estratégica · Group Software</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

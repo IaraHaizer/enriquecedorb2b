@@ -1,7 +1,7 @@
-# Documentação Técnica - Intel B2B
+# Documentação Técnica - Group Radar
 
 ## Arquitetura do Sistema
-O Intel B2B é uma aplicação full-stack moderna construída sobre a infraestrutura do **Supabase**.
+O Group Radar é uma aplicação full-stack moderna construída sobre a infraestrutura do **Supabase**.
 
 ```mermaid
 graph TD

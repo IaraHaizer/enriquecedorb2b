@@ -1,7 +1,7 @@
-# Documentação de Produto - Intel B2B
+# Documentação de Produto - Group Radar
 
 ## Visão Geral
-O **Intel B2B** (Enriquecedor de Leads Estratégico) é uma ferramenta interna desenvolvida para as equipes de vendas da **Group Software** e **PartnerBank**. O objetivo principal é transformar dados brutos de prospecção (como um simples e-mail ou nome de sócio) em dossiês de inteligência comercial altamente detalhados e prontos para ação.
+O **Group Radar** (Enriquecedor de Leads Estratégico) é uma ferramenta interna desenvolvida para as equipes de vendas da **Group Software** e **PartnerBank**. O objetivo principal é transformar dados brutos de prospecção (como um simples e-mail ou nome de sócio) em dossiês de inteligência comercial altamente detalhados e prontos para ação.
 
 ---
 

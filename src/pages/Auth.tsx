@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Crosshair, LogIn, UserPlus } from "lucide-react";
+import { Radar, LogIn, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Auth() {
@@ -39,10 +39,10 @@ export default function Auth() {
       <Card className="w-full max-w-md border-border/50 bg-card">
         <CardHeader className="text-center space-y-4">
           <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Crosshair className="h-6 w-6 text-primary" />
+            <Radar className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-heading">Intel B2B</CardTitle>
+            <CardTitle className="text-2xl font-heading">Group Radar</CardTitle>
             <CardDescription className="text-muted-foreground">
               {isLogin ? "Acesse sua conta para continuar" : "Crie sua conta para acessar a ferramenta"}
             </CardDescription>

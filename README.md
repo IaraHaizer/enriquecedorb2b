@@ -1,4 +1,4 @@
-# Intel B2B - Enriquecedor de Leads Estratégico
+# Group Radar — Inteligência Comercial & Enriquecimento de Leads
 
 Ferramenta avançada para inteligência comercial e enriquecimento de leads B2B, desenvolvida especialmente para o ecossistema Group Software e PartnerBank.
 
