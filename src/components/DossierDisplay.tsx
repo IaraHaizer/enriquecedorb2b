@@ -362,6 +362,16 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
           <InfoRow label="Reputação" value={empresa.reputacao} icon={Award} source={getFieldSource("reputacao", dataSources)} />
           <InfoRow label="Tecnologia Atual" value={empresa.tecnologia_atual || "Não identificado"} icon={Cpu} source={getFieldSource("tecnologia_atual", dataSources)} />
         </div>
+        
+        {empresa.grupos_economicos?.identificado && (
+          <div className="mt-4 p-3 bg-primary/5 border border-primary/20 rounded-md">
+            <div className="flex items-center gap-2 mb-1">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold text-primary uppercase tracking-wider">Grupo Econômico Identificado</span>
+            </div>
+            <p className="text-sm text-muted-foreground font-medium">{empresa.grupos_economicos.detalhes}</p>
+          </div>
+        )}
       </SectionCard>
 
       {/* Domínios Associados */}
@@ -601,6 +611,11 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
                       {c.canal.toLowerCase().includes("linkedin") && <Linkedin className="h-2.5 w-2.5" />}
                       {c.canal}
                     </Badge>
+                    {c.fonte && (
+                      <Badge variant="ghost" className="text-[9px] opacity-60 ml-1 px-1">
+                        {c.fonte}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm">
                     <div className="flex items-center gap-2">

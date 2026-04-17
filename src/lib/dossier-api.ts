@@ -34,6 +34,7 @@ export interface ContatoAbordagem {
   canal: string;
   contato: string;
   is_apollo_verified?: boolean;
+  fonte?: string;
 }
 
 export interface RiscoFinanceiro {
@@ -75,6 +76,7 @@ export interface Dossier {
     reputacao: string;
     atividade_principal: string;
     tecnologia_atual?: string;
+    grupos_economicos?: { identificado: boolean; detalhes: string };
   };
   socio_principal: {
     nome: string;

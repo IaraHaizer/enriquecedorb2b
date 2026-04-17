@@ -652,6 +652,7 @@ async function fetchExternalSources(
   nomeFantasia?: string,
   dominio?: string,
   cnpj?: string | null,
+  endereco?: string,
   skipCache = false
 ): Promise<FirecrawlResult[]> {
   const searchName = empresaNome || cnpj || "";
@@ -678,7 +679,19 @@ async function fetchExternalSources(
     { name: "protestos_negativacoes", query: `"${brandName}" protesto OR negativação OR serasa`, opts: { limit: 3 } },
     { name: "vagas_crescimento", query: `"${brandName}" vagas OR contratando OR expansão`, opts: { limit: 3, tbs: "qdr:m" } },
     { name: "tech_stack", query: `"${brandName}" ERP OR software OR superlógica OR condomob`, opts: { limit: 3 } },
+    { name: "localizacao_contatos", query: `"${brandName}" site:casadosdados.com.br OR site:econodata.com.br OR site:cnpja.com`, opts: { limit: 3 } },
   ];
+
+  if (endereco) {
+    const cleanAddr = endereco.replace(/\d{5}-\d{3}/, "").replace(/\b(sala|andar|bloco|loja|galpao|andar|mezzanino)\b.*$/i, "").trim();
+    if (cleanAddr.length > 10) {
+      sources.push({ 
+        name: "grupo_economico", 
+        query: `"${cleanAddr}" site:casadosdados.com.br OR site:econodata.com.br "outras empresas"`, 
+        opts: { limit: 3 } 
+      });
+    }
+  }
 
   const results = await Promise.all(
     sources.map(async (s) => {
@@ -894,6 +907,11 @@ CONTEXTO REGIONAL (insights_estrategicos.contexto_regional):
 - Use esses dados para sugerir abordagens contextualizadas: ex: "Lead mineiro — reforce a autoridade de 28 anos no estado. Somos líderes absolutos em Minas Gerais."
 - Se o lead for de uma região onde a Group tem menor presença, sugira estratégia de entrada.
 - NUNCA deixe vazio. Mesmo com poucos dados, infira do endereço da Receita Federal.
+- Se houver dados de "grupo_economico" nas fontes externas, analise se existem outras empresas no mesmo endereço com atividades similares ou sócios em comum.
+
+ANÁLISE DE GRUPOS ECONÔMICOS (empresa.grupos_economicos):
+- Se identificar outras empresas no mesmo endereço ou com sócios cruzados, marque "identificado: true".
+- Em "detalhes", explique a relação detectada (ex: "Empresa XPTO e Empresa YYZ operam no mesmo prédio e compartilham o sócio principal").
 
 ESTRUTURA DO "logica_group_software" NO OUTPUT:
 - "analise_fit": Um parágrafo explicando POR QUE o produto X da Group/PartnerBank resolve a dor Y do lead.
@@ -918,7 +936,8 @@ Estrutura do Output (JSON rigoroso):
     "redes_sociais": "string",
     "reputacao": "string (inclua dados do Reclame Aqui se disponíveis)",
     "atividade_principal": "string",
-    "tecnologia_atual": "string (ERP/software identificado ou 'Não identificado')"
+    "tecnologia_atual": "string (ERP/software identificado ou 'Não identificado')",
+    "grupos_economicos": { "identificado": false, "detalhes": "string" }
   },
   "socio_principal": {
     "nome": "string",
@@ -950,7 +969,7 @@ Estrutura do Output (JSON rigoroso):
     "nivel_risco": "Baixo"
   },
   "contatos_abordagem": [
-    { "nome": "string", "cargo": "string", "canal": "string", "contato": "string" }
+    { "nome": "string", "cargo": "string", "canal": "string", "contato": "string", "fonte": "string (ex: 'LinkedIn', 'Site Oficial', 'Casa dos Dados')" }
   ],
   "sinais_crescimento": [
     { "tipo": "positivo", "descricao": "string" }
@@ -1279,7 +1298,8 @@ serve(async (req) => {
     // 2. Fetch external sources using cleaned names and found domain
     console.log(`[Enrichment] Fetching external sources...`);
     const nomeFantasia = cnpjDataRef?.nome_fantasia as string;
-    const externalResults = await fetchExternalSources(empresaNome, nomeFantasia, mainDomain, cnpj, !!skip_cache);
+    const enderecoCompleto = cnpjDataRef ? `${cnpjDataRef.logradouro}, ${cnpjDataRef.numero} - ${cnpjDataRef.municipio}/${cnpjDataRef.uf}` : undefined;
+    const externalResults = await fetchExternalSources(empresaNome, nomeFantasia, mainDomain, cnpj, enderecoCompleto, !!skip_cache);
     
     const externalContext = formatExternalContext(externalResults);
     const externalSourcesFound = externalResults.filter((r) => r.results.length > 0).map((r) => r.source);
@@ -1397,7 +1417,7 @@ ${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
 ${apolloContext ? `\n${apolloContext}\n\nUse os dados do Apollo acima para preencher contatos_abordagem e validar o LinkedIn do sócio principal.` : ""}
 ${ibgeContext ? `\n${ibgeContext}\n\nUse os dados do IBGE para fornecer "contexto_regional" e estimar o ticket médio dos condomínios na região.` : ""}
-${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual.` : ""}
+${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual. AS FONTES "localizacao_contatos" e "grupo_economico" trazem dados de localização e outras empresas no endereço — use-as para cruzar com o endereço da Receita e preencher grupos_economicos.` : ""}
 ${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online. Se houver CONTEÚDO DO SITE, analise-o profundamente para extrair: serviços oferecidos, portfólio de condomínios/imóveis, equipe, diferenciais, tecnologias usadas, e qualquer informação que enriqueça o dossiê e a abordagem comercial.` : ""}
 
 LEMBRETE OBRIGATÓRIO:
