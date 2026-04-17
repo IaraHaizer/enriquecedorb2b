@@ -7,6 +7,7 @@ import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import LeadRanking from "./pages/LeadRanking.tsx";
 import Historico from "./pages/Historico.tsx";
+import BulkProcess from "./pages/BulkProcess.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/ranking" element={<ProtectedRoute><LeadRanking /></ProtectedRoute>} />
           <Route path="/historico" element={<ProtectedRoute><Historico /></ProtectedRoute>} />
+          <Route path="/massa" element={<ProtectedRoute><BulkProcess /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

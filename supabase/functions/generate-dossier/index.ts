@@ -682,6 +682,14 @@ async function fetchExternalSources(
     { name: "localizacao_contatos", query: `"${brandName}" site:casadosdados.com.br OR site:econodata.com.br OR site:cnpja.com`, opts: { limit: 3 } },
   ];
 
+  if (dominio) {
+    sources.push({
+      name: "direct_contacts",
+      query: `site:${dominio} "whatsapp" OR "fale conosco" OR "contato" OR "sac"`,
+      opts: { limit: 2 }
+    });
+  }
+
   if (endereco) {
     const cleanAddr = endereco.replace(/\d{5}-\d{3}/, "").replace(/\b(sala|andar|bloco|loja|galpao|andar|mezzanino)\b.*$/i, "").trim();
     if (cleanAddr.length > 10) {
@@ -912,6 +920,11 @@ CONTEXTO REGIONAL (insights_estrategicos.contexto_regional):
 ANÁLISE DE GRUPOS ECONÔMICOS (empresa.grupos_economicos):
 - Se identificar outras empresas no mesmo endereço ou com sócios cruzados, marque "identificado: true".
 - Em "detalhes", explique a relação detectada (ex: "Empresa XPTO e Empresa YYZ operam no mesmo prédio e compartilham o sócio principal").
+
+EXTRAÇÃO DE CONTATOS (contatos_abordagem):
+- Priorize links de WhatsApp (wa.me) e e-mails corporativos.
+- EXTRAIA o número de telefone de links wa.me se possível (ex: wa.me/5531999991234 -> (31) 99999-1234).
+- Se encontrar um e-mail no site oficial (ex: contato@empresa.com.br), marque-o como canal ideal.
 
 ESTRUTURA DO "logica_group_software" NO OUTPUT:
 - "analise_fit": Um parágrafo explicando POR QUE o produto X da Group/PartnerBank resolve a dor Y do lead.
@@ -1417,7 +1430,7 @@ ${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
 ${apolloContext ? `\n${apolloContext}\n\nUse os dados do Apollo acima para preencher contatos_abordagem e validar o LinkedIn do sócio principal.` : ""}
 ${ibgeContext ? `\n${ibgeContext}\n\nUse os dados do IBGE para fornecer "contexto_regional" e estimar o ticket médio dos condomínios na região.` : ""}
-${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual. AS FONTES "localizacao_contatos" e "grupo_economico" trazem dados de localização e outras empresas no endereço — use-as para cruzar com o endereço da Receita e preencher grupos_economicos.` : ""}
+${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual. AS FONTES "localizacao_contatos" e "grupo_economico" trazem dados de localização e outras empresas no endereço — use-as para cruzar com o endereço da Receita e preencher grupos_economicos. A FONTE "direct_contacts" traz links diretos do site da empresa — use-a para encontrar WhatsApp e e-mails oficiais.` : ""}
 ${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online. Se houver CONTEÚDO DO SITE, analise-o profundamente para extrair: serviços oferecidos, portfólio de condomínios/imóveis, equipe, diferenciais, tecnologias usadas, e qualquer informação que enriqueça o dossiê e a abordagem comercial.` : ""}
 
 LEMBRETE OBRIGATÓRIO:

@@ -242,6 +242,12 @@ function RiscoNivelBadge({ nivel }: { nivel: string }) {
 }
 
 export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDisplayProps) {
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  
+  const handlePrint = () => {
+    window.print();
+  };
+
   const empresa = dossier.empresa || {} as Dossier["empresa"];
   const socio_principal = dossier.socio_principal || {} as Dossier["socio_principal"];
   const mapeamento_socios = dossier.mapeamento_socios || [];
@@ -272,9 +278,30 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
   );
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6 mt-8">
+    <div className="w-full max-w-4xl mx-auto space-y-6 mt-8 print-container">
+      <div className="flex items-center justify-between no-print mb-4 bg-secondary/30 p-4 rounded-lg border border-border/50">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center space-x-2">
+            <span className={`text-xs font-medium ${!showTechnicalDetails ? 'text-primary' : 'text-muted-foreground'}`}>Estratégico</span>
+            <button 
+              onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${showTechnicalDetails ? 'bg-primary' : 'bg-muted'}`}
+            >
+              <span className={`pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${showTechnicalDetails ? 'translate-x-4' : 'translate-x-1'}`} />
+            </button>
+            <span className={`text-xs font-medium ${showTechnicalDetails ? 'text-primary' : 'text-muted-foreground'}`}>Completo</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground max-w-[200px]">
+            {showTechnicalDetails ? "Exibindo logs de fontes e detalhes técnicos." : "Modo limpo para apresentação comercial."}
+          </p>
+        </div>
+        <Button onClick={handlePrint} size="sm" className="gap-2">
+          <Printer className="h-4 w-4" /> Exportar PDF
+        </Button>
+      </div>
+
       {/* Data source legend */}
-      {dataSources && (
+      {dataSources && showTechnicalDetails && (
         <Card className="border-border/50 bg-card/50">
           <CardContent className="py-3 px-4">
             <div className="flex items-center gap-4 flex-wrap text-xs text-muted-foreground">
@@ -488,9 +515,9 @@ export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDispl
         </SectionCard>
       )}
 
-      {/* Fontes Externas */}
-      {hasFonteExternaData && (
-        <SectionCard icon={Search} title="Inteligência de Fontes Externas" accent>
+      {/* Fontes de Dados (Technical Section) */}
+      {hasFonteExternaData && showTechnicalDetails && (
+        <SectionCard icon={Link2} title="Fontes e Detalhes da Web" source="ia">
           <div className="grid md:grid-cols-2 gap-4">
             <FonteExternaCard title="Reclame Aqui" icon={MessageSquare} fonte={fontes_externas?.reclame_aqui} badgeSource="reclame_aqui" />
             <FonteExternaCard title="Processos Judiciais" icon={Scale} fonte={fontes_externas?.processos_judiciais} badgeSource="jusbrasil" />

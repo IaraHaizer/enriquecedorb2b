@@ -5,7 +5,7 @@ import { DossierDisplay } from "@/components/DossierDisplay";
 
 import { toast } from "sonner";
 import { generateDossier, type Dossier, type DataSources, type LeadScore, type InputType } from "@/lib/dossier-api";
-import { Radar, RotateCcw, LogOut, RefreshCw, Search, BarChart3, History } from "lucide-react";
+import { Radar, RotateCcw, LogOut, RefreshCw, Search, BarChart3, History, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppNavLink } from "@/components/AppNavLink";
 import { useAuth } from "@/hooks/useAuth";
@@ -81,6 +81,7 @@ export default function Index() {
             <AppNavLink to="/" icon={Search} label="Pesquisa" active />
             <AppNavLink to="/ranking" icon={BarChart3} label="Ranking" />
             <AppNavLink to="/historico" icon={History} label="Histórico" />
+            <AppNavLink to="/massa" icon={Layers} label="Massa" />
             {dossier && !isLoading && (
               <>
                 <Button variant="ghost" size="sm" onClick={handleForceRefresh} className="text-muted-foreground" disabled={!lastInput}>

@@ -99,3 +99,47 @@
     @apply font-heading;
   }
 }
+
+@media print {
+  header, 
+  nav, 
+  button, 
+  .no-print,
+  .source-badges {
+    display: none !important;
+  }
+
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  .print-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .card {
+    border: 1px solid #e2e8f0 !important;
+    break-inside: avoid !important;
+    margin-bottom: 20px !important;
+    box-shadow: none !important;
+  }
+
+  .dark {
+    color-scheme: light !important;
+  }
+
+  .bg-card, .bg-secondary {
+    background-color: #f8fafc !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  /* Force background colors in print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
