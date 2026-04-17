@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import type { Dossier, DataSources, LeadScore } from "@/lib/dossier-api";
 import { useState, useEffect } from "react";
@@ -366,11 +367,34 @@ export function DossierDisplay({ dossier, dataSources, leadScore, forceShowTechn
         </Card>
       )}
 
+      {/* ALERTAS DE INTEGRIDADE DE DADOS */}
+      {empresa.status_integridade && empresa.status_integridade.nivel !== "Suficiente" && (
+        <Alert variant={empresa.status_integridade.nivel === "Insuficiente" ? "destructive" : "default"} className="no-print border-orange-500/50 bg-orange-500/5">
+          <AlertCircle className="h-4 w-4 text-orange-500" />
+          <AlertTitle className="text-orange-600 font-bold">Qualidade da Informação: {empresa.status_integridade.nivel}</AlertTitle>
+          <AlertDescription className="text-orange-700">
+            {empresa.status_integridade.motivo}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Header */}
       <div className="text-center space-y-2">
+        <div className="flex justify-center mb-2">
+           {empresa.status_integridade?.is_provisorio && (
+            <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/20 animate-pulse">
+              Dossiê Provisório
+            </Badge>
+          )}
+        </div>
         <h2 className="text-2xl font-heading font-bold">{empresa.nome || "Empresa"}</h2>
         <div className="flex items-center justify-center gap-2 flex-wrap">
-          {empresa.cnpj && <Badge variant="outline">{empresa.cnpj}</Badge>}
+          {empresa.cnpj && (
+            <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-0.5 rounded-md text-xs font-mono">
+              <Database className="h-3 w-3" />
+              {empresa.cnpj}
+            </div>
+          )}
           {empresa.situacao && (
             <Badge className={empresa.situacao.toLowerCase().includes("ativa") ? "bg-accent text-accent-foreground" : "bg-destructive text-destructive-foreground"}>
               {empresa.situacao}

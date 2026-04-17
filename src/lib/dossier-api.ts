@@ -62,21 +62,28 @@ export interface DominioAssociado {
   score?: number;
 }
 
+export interface StatusIntegridade {
+  nivel: "Suficiente" | "Parcial" | "Insuficiente";
+  motivo: string;
+  is_provisorio: boolean;
+}
+
 export interface Dossier {
   empresa: {
     nome: string;
-    cnpj: string;
-    situacao: string;
-    abertura: string;
-    porte: string;
-    capital_social: string;
-    endereco: string;
-    telefone: string;
-    redes_sociais: string;
-    reputacao: string;
-    atividade_principal: string;
+    cnpj?: string;
+    situacao?: string;
+    abertura?: string;
+    porte?: string;
+    capital_social?: string;
+    endereco?: string;
+    telefone?: string;
+    redes_sociais?: string;
+    reputacao?: string;
+    atividade_principal?: string;
     tecnologia_atual?: string;
     grupos_economicos?: { identificado: boolean; detalhes: string };
+    status_integridade?: StatusIntegridade;
   };
   socio_principal: {
     nome: string;

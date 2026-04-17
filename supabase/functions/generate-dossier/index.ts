@@ -950,7 +950,12 @@ Estrutura do Output (JSON rigoroso):
     "reputacao": "string (inclua dados do Reclame Aqui se disponíveis)",
     "atividade_principal": "string",
     "tecnologia_atual": "string (ERP/software identificado ou 'Não identificado')",
-    "grupos_economicos": { "identificado": false, "detalhes": "string" }
+    "grupos_economicos": { "identificado": false, "detalhes": "string" },
+    "status_integridade": {
+      "nivel": "Suficiente" | "Parcial" | "Insuficiente",
+      "motivo": "string (ex: 'Dados oficiais da Receita Federal não localizados. Dossiê baseado em fontes web e redes sociais.')",
+      "is_provisorio": boolean
+    }
   },
   "socio_principal": {
     "nome": "string",
@@ -1214,6 +1219,46 @@ serve(async (req) => {
     let cascadeContext = "";
     let cnpj = extractCnpj(input as string, input_type as string);
     let cnpjDataRef: Record<string, unknown> | null = null;
+    let emailInput = input_type === "email" ? (input as string) : null;
+
+    // === NEW EMAIL FLOW ===
+    if (emailInput) {
+      console.log(`[Email Flow] Starting search for email: ${emailInput}`);
+      // 1. Try Apollo to find company from email
+      const apolloInitial = await fetchApolloEnrichment({ email: emailInput });
+      if (apolloInitial?.organization) {
+        const org: any = apolloInitial.organization;
+        empresaNome = org.name;
+        const orgDomain = org.primary_domain;
+        console.log(`[Email Flow] Apollo found company: "${empresaNome}" | Domain: ${orgDomain}`);
+        
+        // 2. Try to find CNPJ for this company
+        const cnpjSearch = await firecrawlSearch(
+          `CNPJ "${empresaNome}" site:cnpj.biz OR site:casadosdados.com.br`,
+          "email_to_cnpj", { limit: 2 }
+        );
+        const cnpjMatch = cnpjSearch.results.map(r => r.title + r.description).join(" ").match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
+        if (cnpjMatch) {
+          cnpj = cnpjMatch[0];
+          console.log(`[Email Flow] Deduced CNPJ: ${cnpj}`);
+        }
+      } else {
+        // Fallback: use domain from email
+        const domain = emailInput.split("@")[1];
+        if (domain && !domain.match(/gmail|hotmail|outlook|yahoo|uol|bol|terra|ig\.com/i)) {
+          console.log(`[Email Flow] Domain fallback: ${domain}`);
+          const domainSearch = await firecrawlSearch(
+             `CNPJ "${domain}" site:registro.br OR site:cnpj.biz`,
+             "domain_to_cnpj", { limit: 2 }
+          );
+          const cnpjMatch = domainSearch.results.map(r => r.title + r.description).join(" ").match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
+          if (cnpjMatch) {
+            cnpj = cnpjMatch[0];
+            console.log(`[Email Flow] Found CNPJ via domain: ${cnpj}`);
+          }
+        }
+      }
+    }
 
     if (cnpj) {
       console.log(`Fetching CNPJ data for: ${cnpj}`);
