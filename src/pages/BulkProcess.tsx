@@ -7,8 +7,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { generateDossier, type DossierResult, type InputType } from "@/lib/dossier-api";
-import { Upload, Play, Download, Trash2, CheckCircle2, XCircle, Loader2, ArrowLeft } from "lucide-react";
+import { Upload, Play, Download, Trash2, CheckCircle2, XCircle, Loader2, ArrowLeft, Eye, Printer, FileText, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { DossierDisplay } from "@/components/DossierDisplay";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Card as CardShadcn } from "@/components/ui/card";
 
 interface BulkItem {
   input: string;
@@ -22,6 +27,9 @@ export default function BulkProcess() {
   const [items, setItems] = useState<BulkItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [selectedResult, setSelectedResult] = useState<DossierResult | null>(null);
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
+  const [printMode, setPrintMode] = useState<"estrategico" | "completo">("estrategico");
   const navigate = useNavigate();
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,6 +89,23 @@ export default function BulkProcess() {
 
     setIsProcessing(false);
     toast.success("Processamento em massa concluído.");
+  };
+
+  const startMassDownload = () => {
+    const completedItems = items.filter(i => i.status === "completed" && i.result);
+    if (completedItems.length === 0) {
+      toast.error("Nenhum dossiê pronto para download.");
+      return;
+    }
+    setIsPrintDialogOpen(true);
+  };
+
+  const confirmMassPrint = () => {
+    setIsPrintDialogOpen(false);
+    // Give time for the modal to close and the print layout to be ready
+    setTimeout(() => {
+        window.print();
+    }, 500);
   };
 
   const exportResults = () => {
@@ -176,10 +201,18 @@ export default function BulkProcess() {
                 <Button 
                     variant="secondary" 
                     className="w-full gap-2" 
+                    onClick={startMassDownload}
+                    disabled={!items.some(i => i.status === "completed")}
+                >
+                    <FileText className="h-4 w-4" /> Baixar PDFs (Massa)
+                </Button>
+                <Button 
+                    variant="outline" 
+                    className="w-full gap-2 opacity-70" 
                     onClick={exportResults}
                     disabled={!items.some(i => i.status === "completed")}
                 >
-                    <Download className="h-4 w-4" /> Exportar Planilha
+                    <Download className="h-4 w-4" /> Exportar Planilha (CSV)
                 </Button>
                 <Button 
                     variant="ghost" 
@@ -254,18 +287,30 @@ export default function BulkProcess() {
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                {item.result ? (
-                                                    <div className="text-xs">
-                                                        <div className="font-semibold truncate max-w-[150px] inline-block">
-                                                            {item.result.dossier.empresa.nome}
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {item.result && (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-8 w-8 text-primary"
+                                                            onClick={() => setSelectedResult(item.result!)}
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    {item.result ? (
+                                                        <div className="text-xs text-left">
+                                                            <div className="font-semibold truncate max-w-[150px] inline-block">
+                                                                {item.result.dossier.empresa.nome}
+                                                            </div>
+                                                            <div className="text-[10px] text-muted-foreground">
+                                                                Score: <span className="text-primary font-bold">{item.result.lead_score?.total}</span>
+                                                            </div>
                                                         </div>
-                                                        <div className="text-[10px] text-muted-foreground">
-                                                            Score: <span className="text-primary font-bold">{item.result.lead_score?.total}</span>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-xs text-muted-foreground">—</span>
-                                                )}
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">—</span>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -285,6 +330,137 @@ export default function BulkProcess() {
           </Card>
         </div>
       </main>
+
+      {/* MODAL DE VISUALIZAÇÃO INDIVIDUAL */}
+      <Dialog open={!!selectedResult} onOpenChange={(open) => !open && setSelectedResult(null)}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0 border-none bg-transparent">
+          <div className="bg-background rounded-lg p-6 shadow-2xl relative">
+            <DialogHeader className="mb-6">
+              <DialogTitle className="text-2xl font-heading">Dossiê Detalhado</DialogTitle>
+            </DialogHeader>
+            {selectedResult && (
+              <DossierDisplay 
+                dossier={selectedResult.dossier} 
+                dataSources={selectedResult.data_sources} 
+                leadScore={selectedResult.lead_score} 
+              />
+            )}
+            <div className="mt-8 flex justify-end no-print">
+               <Button variant="outline" onClick={() => setSelectedResult(null)}>Fechar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE SELEÇÃO DE DOWNLOAD EM MASSA */}
+      <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Exportar Relatório Consolidado</DialogTitle>
+          </DialogHeader>
+          <div className="py-6 space-y-6">
+            <RadioGroup value={printMode} onValueChange={(v: any) => setPrintMode(v)} className="grid gap-4">
+              <Label
+                htmlFor="estrategico"
+                className={`flex items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer ${printMode === 'estrategico' ? 'border-primary' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <RadioGroupItem value="estrategico" id="estrategico" className="sr-only" />
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <CheckCircle2 className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">Modelo Estratégico</p>
+                    <p className="text-xs text-muted-foreground">Focado em vendas. Sem logs técnicos.</p>
+                  </div>
+                </div>
+              </Label>
+              <Label
+                htmlFor="completo"
+                className={`flex items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer ${printMode === 'completo' ? 'border-primary' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <RadioGroupItem value="completo" id="completo" className="sr-only" />
+                  <div className="h-8 w-8 rounded-full bg-secondary/30 flex items-center justify-center">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">Modelo Completo</p>
+                    <p className="text-xs text-muted-foreground">Inclui origens dos dados e logs de análise.</p>
+                  </div>
+                </div>
+              </Label>
+            </RadioGroup>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPrintDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={confirmMassPrint} className="gap-2">
+              <Printer className="h-4 w-4" /> Baixar Consolidado (PDF)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* LAYOUT DE IMPRESSÃO EM MASSA (OCULTO NA TELA) */}
+      <div className="hidden print:block absolute inset-0 bg-white text-black p-0 m-0 z-[-1]">
+        {/* CAPA DO SUMÁRIO EXECUTIVO */}
+        <div className="min-h-screen flex flex-col p-16 relative">
+          <div className="border-b-2 border-primary pb-8 mb-12">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="h-12 w-12 bg-primary rounded-lg flex items-center justify-center">
+                <Radar className="h-8 w-8 text-white" />
+              </div>
+              <h1 className="text-4xl font-bold tracking-tight">Relatório Consolidado de Inteligência</h1>
+            </div>
+            <p className="text-xl text-muted-foreground">Group Radar Enterprise</p>
+          </div>
+
+          <div className="space-y-8 flex-1">
+            <div className="bg-secondary/20 p-6 rounded-xl border border-border">
+              <h2 className="text-2xl font-bold mb-4 uppercase tracking-wider text-primary">Sumário Executivo</h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-6 gap-4 font-bold text-sm border-b pb-2">
+                  <div className="col-span-3">EMPRESA</div>
+                  <div>CNPJ</div>
+                  <div>SCORE</div>
+                  <div className="text-right">STATUS</div>
+                </div>
+                {items.filter(i => i.status === "completed").map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-6 gap-4 text-sm py-1 border-b border-border/50">
+                    <div className="col-span-3 font-medium">{item.result?.dossier.empresa.nome}</div>
+                    <div className="text-xs opacity-70">{item.result?.dossier.empresa.cnpj}</div>
+                    <div className="font-bold text-primary">{item.result?.lead_score?.total}</div>
+                    <div className="text-right">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary border border-primary/20`}>
+                            {item.result?.lead_score?.classificacao}
+                        </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-auto pt-10 text-sm text-muted-foreground flex justify-between items-center">
+              <span>Gerado em: {new Date().toLocaleString('pt-BR')}</span>
+              <span>Total de Leads: {items.filter(i => i.status === "completed").length}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* CADA DOSSIÊ EM UMA NOVA PÁGINA */}
+        {items.filter(i => i.status === "completed").map((item, idx) => (
+          <div key={idx} className="page-break-before">
+            <div className="p-8">
+                <DossierDisplay 
+                    dossier={item.result!.dossier} 
+                    dataSources={item.result!.data_sources} 
+                    leadScore={item.result!.lead_score} 
+                    forceShowTechnical={printMode === 'completo'}
+                />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

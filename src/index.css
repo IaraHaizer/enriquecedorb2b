@@ -137,9 +137,21 @@
     -webkit-print-color-adjust: exact !important;
   }
 
+  /* Page breaks for bulk reports */
+  .page-break-before {
+    break-before: page !important;
+    padding-top: 2rem !important;
+  }
+
+  .dossier-print-item {
+    break-inside: avoid !important;
+    margin-bottom: 2rem !important;
+  }
+
   /* Force background colors in print */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 }
+

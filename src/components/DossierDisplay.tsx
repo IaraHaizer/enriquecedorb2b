@@ -14,12 +14,13 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import type { Dossier, DataSources, LeadScore } from "@/lib/dossier-api";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface DossierDisplayProps {
   dossier: Dossier;
   dataSources?: DataSources | null;
   leadScore?: LeadScore | null;
+  forceShowTechnical?: boolean;
 }
 
 function SourceBadge({ source }: { source: "receita" | "ia" | "firecrawl" | "reclame_aqui" | "jusbrasil" | "linkedin" | "instagram" | "facebook" | "youtube" | "twitter" | "noticias" }) {
@@ -241,8 +242,14 @@ function RiscoNivelBadge({ nivel }: { nivel: string }) {
   );
 }
 
-export function DossierDisplay({ dossier, dataSources, leadScore }: DossierDisplayProps) {
-  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+export function DossierDisplay({ dossier, dataSources, leadScore, forceShowTechnical }: DossierDisplayProps) {
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(forceShowTechnical || false);
+  
+  useEffect(() => {
+    if (forceShowTechnical !== undefined) {
+      setShowTechnicalDetails(forceShowTechnical);
+    }
+  }, [forceShowTechnical]);
   
   const handlePrint = () => {
     window.print();
