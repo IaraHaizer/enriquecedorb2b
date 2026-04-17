@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   History, Download, Search, Filter, Building2, Hash, Mail, User,
-  Eye, LogOut, Crosshair, BarChart3, Calendar, X,
+  Eye, LogOut, Radar, BarChart3, Calendar, X,
   ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -106,10 +106,10 @@ export default function Historico() {
         <div className="container max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Crosshair className="h-5 w-5 text-primary" />
+              <Radar className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-lg font-heading font-bold tracking-tight">Intel B2B</h1>
+              <h1 className="text-lg font-heading font-bold tracking-tight">Group Radar</h1>
               <p className="text-xs text-muted-foreground">Inteligência Comercial · Group Software</p>
             </div>
           </div>
