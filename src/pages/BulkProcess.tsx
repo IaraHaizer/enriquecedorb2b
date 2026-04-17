@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { generateDossier, type DossierResult, type InputType } from "@/lib/dossier-api";
-import { Upload, Play, Download, Trash2, CheckCircle2, XCircle, Loader2, ArrowLeft, Eye, Printer, FileText, ChevronRight } from "lucide-react";
+import { Upload, Play, Download, Trash2, CheckCircle2, XCircle, Loader2, ArrowLeft, Eye, Printer, FileText, ChevronRight, Radar } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { DossierDisplay } from "@/components/DossierDisplay";
