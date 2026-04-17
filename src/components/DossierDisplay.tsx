@@ -4,10 +4,12 @@ import {
   MessageSquare, AlertTriangle, Package, Database, Sparkles,
   Search, Scale, Newspaper, ExternalLink, TrendingUp, ChevronDown, ChevronUp,
   Shield, AlertCircle, PhoneCall, Mail, Cpu, ArrowUpRight, ArrowDownRight, Minus,
-  Link2, Server, Calendar, Facebook, Instagram, Youtube, Twitter
+  Link2, Server, Calendar, Facebook, Instagram, Youtube, Twitter,
+  Printer, Eye
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
