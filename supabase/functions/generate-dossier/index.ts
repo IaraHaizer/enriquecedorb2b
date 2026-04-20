@@ -956,6 +956,10 @@ REGRAS DE RECOMENDAÇÃO (logica_group_software):
 6. Sócio advogado: Foque em Compliance, Assembleia Digital, segurança jurídica.
 7. Muitos sócios: Foque em gestão de processos, produtividade da equipe, dashboards.
 
+⚠️ REGRA CRÍTICA — DOMÍNIO INTERNO / JÁ CLIENTE:
+- Se o campo "AVISO:" no contexto indicar que o e-mail pertence a um domínio da Group Software ou PartnerBank (ex: groupsoftware.com.br, partnerbank.com.br), você está analisando um FUNCIONÁRIO ou PARCEIRO INTERNO, e NÃO um lead externo.
+- Nesse caso: (a) Preencha "logica_group_software.analise_fit" indicando que a pessoa já é interna à Group Software. (b) NUNCA sugira venda de produtos Group para alguém que já trabalha lá. (c) Redirecione o foco para o PERFIL PROFISSIONAL da pessoa, suas conexões externas, e possíveis oportunidades de indicação/parceria. (d) Em "logica_group_software.gancho_venda", escreva "NÃO APLICÁVEL — Lead interno. Analisar como oportunidade de advocacia ou indicação."
+
 NOVAS SEÇÕES DO DOSSIÊ ENRIQUECIDO:
 
 RISCO FINANCEIRO (risco_financeiro):
@@ -1442,10 +1446,33 @@ serve(async (req) => {
     const nomeFantasia = cnpjDataRef?.nome_fantasia as string;
     const enderecoCompleto = cnpjDataRef ? `${cnpjDataRef.logradouro}, ${cnpjDataRef.numero} - ${cnpjDataRef.municipio}/${cnpjDataRef.uf}` : undefined;
 
+    // Detectar se o e-mail é de domínio interno / já cliente Group Software
+    const emailDomainRaw = emailInput ? emailInput.split("@")[1]?.toLowerCase() : "";
+    const isGroupInternalDomain = emailDomainRaw
+      ? /groupsoftware|group\.com\.br|partnerbank/.test(emailDomainRaw)
+      : false;
+    if (isGroupInternalDomain) {
+      console.warn(`[Email Flow] WARNING: E-mail domain "${emailDomainRaw}" belongs to Group Software itself. This is an internal lead.`);
+    }
+
+    // Derivar nome da pessoa a partir do Apollo ou da parte local do e-mail
+    let personNomeDerivado = "";
+    if (personEmail) {
+      // Tenta extrair nome da parte local do email: joao.silva@empresa.com -> "joao silva"
+      const localPart = personEmail.split("@")[0] || "";
+      personNomeDerivado = localPart.replace(/[._-]/g, " ").replace(/\d/g, "").trim();
+      console.log(`[Email Flow] Person name derived from email: "${personNomeDerivado}"`);
+    }
+
     // Disparar consultas independentes
-    const [domainData, externalResults, seeklocData, ibgeData] = await Promise.all([
+    const [domainData, externalResults, externalPersonResults, seeklocData, ibgeData] = await Promise.all([
       fetchDomainInfo(empresaNome, cnpj, cnpjDataRef, !!skip_cache),
       fetchExternalSources(empresaNome, nomeFantasia, null, cnpj, enderecoCompleto, !!skip_cache),
+      // Buscas focadas na PESSOA para input tipo email
+      personNomeDerivado && personNomeDerivado.length > 4 ? Promise.all([
+        firecrawlSearch(`"${personNomeDerivado}" site:linkedin.com/in`, "person_linkedin", { limit: 3 }),
+        firecrawlSearch(`"${personNomeDerivado}" site:instagram.com`, "person_instagram", { limit: 2 }),
+      ]) : Promise.resolve(null),
       cnpj ? fetchSeeklocData(cnpj, "1") : Promise.resolve(null),
       cnpjDataRef?.codigo_municipio_ibge ? fetchIbgeData(cnpjDataRef.codigo_municipio_ibge as string) : Promise.resolve(null)
     ]);
@@ -1501,6 +1528,27 @@ serve(async (req) => {
       await Promise.all(phase2Promises);
     }
 
+    // Merge person-level results (LinkedIn/Instagram de pessoa) into context
+    let personContext = "";
+    if (externalPersonResults) {
+      const [personLinkedin, personInstagram] = externalPersonResults;
+      const personName = personNomeDerivado || "";
+      const linkedinSnippet = personLinkedin?.results?.map((r: any) => `${r.title}: ${r.description}`).join("\n") || "";
+      const instagramSnippet = personInstagram?.results?.map((r: any) => `${r.url}`).join(", ") || "";
+      if (linkedinSnippet || instagramSnippet) {
+        personContext = `\n=== PERFIL PESSOAL DO CONTATO ("${personName}") ===\n`;
+        if (linkedinSnippet) personContext += `LinkedIn Pessoal:\n${linkedinSnippet}\n`;
+        if (instagramSnippet) personContext += `Instagram Pessoal: ${instagramSnippet}\n`;
+        personContext += `=== FIM PERFIL PESSOAL ===`;
+        console.log(`[Person] Found personal profiles for "${personName}"`);
+      }
+    }
+
+    // Aviso de domínio interno para a IA
+    const internalDomainWarning = isGroupInternalDomain
+      ? `\nAVISO: O e-mail "${personEmail}" pertence ao domínio "${emailDomainRaw}", que é um domínio da própria Group Software / PartnerBank. Este NÃO é um lead externo — siga as REGRAS CRÍTICAS de domínio interno do system prompt.\n`
+      : "";
+
     // === CONTEXT FORMATTING ===
     const externalContext = formatExternalContext(externalResults);
     const externalSourcesFound = externalResults.filter((r) => r.results.length > 0).map((r) => r.source);
@@ -1541,11 +1589,12 @@ serve(async (req) => {
     const userMessage = `Gere o dossiê completo ENRIQUECIDO para o seguinte lead:
 Tipo de input: ${input_type}
 Dado fornecido: ${input}
-${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa → CNPJ) ===${cascadeContext}\n=== FIM CASCATA ===` : ""}
+${internalDomainWarning}${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa → CNPJ) ===${cascadeContext}\n=== FIM CASCATA ===` : ""}
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
 ${apolloContext ? `\n${apolloContext}\n\nUse os dados do Apollo acima para preencher contatos_abordagem e validar o LinkedIn do sócio principal.` : ""}
 ${ibgeContext ? `\n${ibgeContext}\n\nUse os dados do IBGE para fornecer "contexto_regional" e estimar o ticket médio dos condomínios na região.` : ""}
 ${seeklocContext ? `\n${seeklocContext}\n\nUse os dados do Seekloc como fonte secundária e altamente confiável para telefones, e-mails e endereços. Se houver divergência com a Receita Federal, mencione a existência de dados mais recentes no Seekloc.` : ""}
+${personContext ? `\n${personContext}\n\nINSTRUÇÃO DE CRUZAMENTO — PERFIL DO CONTATO x EMPRESA:\nO perfil pessoal acima é de um decisor ou sócio da empresa analisada. Use esses dados para ENRIQUECER o dossiê da EMPRESA, não para fazer um dossiê da pessoa:\n- Use o cargo e empresa listados no LinkedIn para CONFIRMAR o porte e segmento da empresa.\n- Use o histórico profissional para entender o nível de maturidade e exigência da gestão (ex: sócio com passagem por grandes grupos = empresa bem estruturada).\n- Use menções a portfólio (ex: "gerenciamos 300 condomínios" no perfil) para estimar o volume da empresa.\n- Use o Instagram para capturar posicionamento de marca, estilo de comunicação, eventos, parcerias e sinais de crescimento da empresa.\n- Preencha socio_principal.linkedin com a URL real encontrada e socio_principal.historico_profissional com o que encontrou no perfil.\n- Preencha contatos_abordagem com a pessoa encontrada, incluindo canal preferencial baseado no perfil pessoal (ex: LinkedIn se for ativo lá).` : ""}
 ${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual. AS FONTES "localizacao_contatos" e "grupo_economico" trazem dados de localização e outras empresas no endereço — use-as para cruzar com o endereço da Receita e preencher grupos_economicos. A FONTE "direct_contacts" traz links diretos do site da empresa — use-a para encontrar WhatsApp e e-mails oficiais.` : ""}
 ${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online. Se houver CONTEÚDO DO SITE, analise-o profundamente para extrair: serviços oferecidos, portfólio de condomínios/imóveis, equipe, diferenciais, tecnologias usadas, e qualquer informação que enriqueça o dossiê e a abordagem comercial.` : ""}
 
