@@ -1421,29 +1421,13 @@ serve(async (req) => {
       empresaNome = input as string;
     }
 
-    // === SEQUENTIAL ENRICHMENT ===
-    // 1. Fetch domain info first to use the domain in external searches
-    console.log(`[Enrichment] Fetching domains...${skip_cache ? " (cache ignorado)" : ""}`);
-    const domainData = await fetchDomainInfo(empresaNome, cnpj, cnpjDataRef, !!skip_cache);
-    const mainDomain = domainData.dominios[0]?.dominio;
-    console.log(`[Enrichment] Domains found: ${domainData.dominios.length}${mainDomain ? ` (Main: ${mainDomain})` : ""}`);
-
-    // 2. Fetch external sources using cleaned names and found domain
-    console.log(`[Enrichment] Fetching external sources...`);
-    const nomeFantasia = cnpjDataRef?.nome_fantasia as string;
-    const enderecoCompleto = cnpjDataRef ? `${cnpjDataRef.logradouro}, ${cnpjDataRef.numero} - ${cnpjDataRef.municipio}/${cnpjDataRef.uf}` : undefined;
-    const externalResults = await fetchExternalSources(empresaNome, nomeFantasia, mainDomain, cnpj, enderecoCompleto, !!skip_cache);
+    // === PARALLEL ENRICHMENT PHASE 1 ===
+    console.log(`[Enrichment] Starting parallel data fetching...`);
     
-    const externalContext = formatExternalContext(externalResults);
-    const externalSourcesFound = externalResults.filter((r) => r.results.length > 0).map((r) => r.source);
-    console.log(`[Enrichment] External sources found: ${externalSourcesFound.join(", ") || "none"}`);
-
-    // === NEW: Apollo Enrichment ===
-    let apolloData: Record<string, unknown> | null = null;
+    // Preparar dados para Apollo
     let personFirstName = "";
     let personLastName = "";
     const personEmail = input_type === "email" ? (input as string) : undefined;
-
     if (input_type === "nome") {
       const parts = (input as string).trim().split(/\s+/);
       personFirstName = parts[0];
@@ -1455,23 +1439,71 @@ serve(async (req) => {
       personLastName = parts.slice(1).join(" ");
     }
 
+    const nomeFantasia = cnpjDataRef?.nome_fantasia as string;
+    const enderecoCompleto = cnpjDataRef ? `${cnpjDataRef.logradouro}, ${cnpjDataRef.numero} - ${cnpjDataRef.municipio}/${cnpjDataRef.uf}` : undefined;
+
+    // Disparar consultas independentes
+    const [domainData, externalResults, seeklocData, ibgeData] = await Promise.all([
+      fetchDomainInfo(empresaNome, cnpj, cnpjDataRef, !!skip_cache),
+      fetchExternalSources(empresaNome, nomeFantasia, null, cnpj, enderecoCompleto, !!skip_cache),
+      cnpj ? fetchSeeklocData(cnpj, "1") : Promise.resolve(null),
+      cnpjDataRef?.codigo_municipio_ibge ? fetchIbgeData(cnpjDataRef.codigo_municipio_ibge as string) : Promise.resolve(null)
+    ]);
+
+    const mainDomain = domainData.dominios[0]?.dominio;
     const mainDomainObj = domainData.dominios[0];
     const isDomainValidated = mainDomainObj?.is_validated;
     const domainScore = mainDomainObj?.score || 0;
 
-    // Call Apollo if we have a validated domain OR an email OR if it's a high-score candidate
+    // === PARALLEL ENRICHMENT PHASE 2 (Dependent on Domain) ===
+    let apolloData: Record<string, unknown> | null = null;
+    let websiteContent = "";
+    let extractedSocialLinks: string[] = [];
+
+    const phase2Promises = [];
+
+    // Apollo needs domain or email
     if (personEmail || (mainDomain && (isDomainValidated || domainScore >= 110))) {
-      apolloData = await fetchApolloEnrichment({
+      phase2Promises.push(fetchApolloEnrichment({
         firstName: personFirstName || undefined,
         lastName: personLastName || undefined,
         email: personEmail,
         domain: mainDomain,
-      });
+      }).then(data => { apolloData = data; }));
+    }
 
-      if (apolloData) {
-        console.log(`[Apollo] Successfully enriched: ${apolloData.first_name} ${apolloData.last_name}`);
+    // Website scrape needs domain
+    if (mainDomain) {
+      const websiteUrl = `https://www.${mainDomain}`;
+      const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
+      if (apiKey) {
+        phase2Promises.push(
+          fetch("https://api.firecrawl.dev/v1/scrape", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ url: websiteUrl, formats: ["markdown"], onlyMainContent: true, timeout: 10000 }),
+          }).then(async (resp) => {
+            if (resp.ok) {
+              const scrapeData = await resp.json();
+              const md = scrapeData?.data?.markdown || scrapeData?.markdown || "";
+              if (md.length > 50) {
+                websiteContent = md.slice(0, 3000);
+                extractedSocialLinks = extractSocialLinksFromMarkdown(md);
+              }
+            }
+          }).catch(err => console.warn(`[Website] Scrape error:`, err))
+        );
       }
     }
+
+    if (phase2Promises.length > 0) {
+      console.log(`[Enrichment] Starting Phase 2 (Apollo/Scrape)...`);
+      await Promise.all(phase2Promises);
+    }
+
+    // === CONTEXT FORMATTING ===
+    const externalContext = formatExternalContext(externalResults);
+    const externalSourcesFound = externalResults.filter((r) => r.results.length > 0).map((r) => r.source);
 
     let apolloContext = "";
     if (apolloData) {
@@ -1485,13 +1517,6 @@ serve(async (req) => {
         (apolloData.organization ? `Empresa no Apollo: ${(apolloData.organization as any).name}\n` : "");
     }
 
-    // === NEW: IBGE Enrichment ===
-    let ibgeData: Record<string, any> | null = null;
-    const codigoIbge = cnpjDataRef?.codigo_municipio_ibge as string;
-    if (codigoIbge) {
-      ibgeData = await fetchIbgeData(codigoIbge);
-    }
-
     let ibgeContext = "";
     if (ibgeData) {
       ibgeContext = `\n=== DADOS SOCIOECONÔMICOS MUNICIPAIS (IBGE) ===\n` +
@@ -1500,51 +1525,9 @@ serve(async (req) => {
         (ibgeData.pib ? `PIB Municipal: R$ ${Number(ibgeData.pib).toLocaleString("pt-BR")} mil (${ibgeData.pib_ano})\n` : "");
     }
 
-    // === NEW: Seekloc Enrichment ===
-    let seeklocData: Record<string, any> | null = null;
-    if (cnpj) {
-      seeklocData = await fetchSeeklocData(cnpj, "1");
-    }
-
     let seeklocContext = "";
     if (seeklocData) {
       seeklocContext = formatSeeklocContext(seeklocData);
-      console.log(`[Seekloc] Data found for ${cnpj || input}`);
-    }
-
-    // Scrape the company website for rich content AND social links
-    let websiteContent = "";
-    let extractedSocialLinks: string[] = [];
-    if (mainDomain) {
-      const websiteUrl = `https://www.${mainDomain}`;
-      console.log(`[Website] Scraping company website: ${websiteUrl}`);
-      try {
-        const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
-        if (apiKey) {
-          const scrapeResp = await fetch("https://api.firecrawl.dev/v1/scrape", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ url: websiteUrl, formats: ["markdown"], onlyMainContent: true, timeout: 10000 }),
-          });
-          if (scrapeResp.ok) {
-            const scrapeData = await scrapeResp.json();
-            const md = scrapeData?.data?.markdown || scrapeData?.markdown || "";
-            if (md.length > 50) {
-              websiteContent = md.slice(0, 3000);
-              console.log(`[Website] Scraped ${websiteContent.length} chars from ${websiteUrl}`);
-              extractedSocialLinks = extractSocialLinksFromMarkdown(md);
-              if (extractedSocialLinks.length > 0) {
-                console.log(`[Website] Extracted ${extractedSocialLinks.length} social links from site`);
-              }
-            }
-          } else {
-            console.warn(`[Website] Scrape failed with status ${scrapeResp.status}`);
-            await scrapeResp.text(); // consume body
-          }
-        }
-      } catch (err) {
-        console.warn(`[Website] Error scraping website:`, err);
-      }
     }
 
     // Format domain context for AI
