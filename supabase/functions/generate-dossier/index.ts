@@ -596,6 +596,66 @@ async function fetchIbgeData(codigoIbge: string): Promise<Record<string, unknown
   }
 }
 
+async function fetchSeeklocData(documento: string, tipo: string = "1"): Promise<Record<string, unknown> | null> {
+  const user = Deno.env.get("SEEKLOC_USER");
+  const pwd = Deno.env.get("SEEKLOC_PWD");
+  const emp = Deno.env.get("SEEKLOC_EMP");
+
+  if (!user || !pwd || !emp) {
+    console.warn("[Seekloc] Credentials not configured");
+    return null;
+  }
+
+  try {
+    const cleanDoc = documento.replace(/[^\d]/g, "");
+    console.log(`[Seekloc] Querying for document: ${cleanDoc} (type: ${tipo})`);
+    
+    const body = new URLSearchParams();
+    body.append("usr", user);
+    body.append("pwd", pwd);
+    body.append("emp", emp);
+    body.append("tp", tipo);
+    body.append("doc", cleanDoc);
+
+    const response = await fetch("http://200.201.193.100/seekloc/ws.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      },
+      body: body.toString(),
+    });
+
+    if (!response.ok) {
+      console.warn(`[Seekloc] Error ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data || null;
+  } catch (err) {
+    console.warn("[Seekloc] Fetch error:", err);
+    return null;
+  }
+}
+
+function formatSeeklocContext(data: any): string {
+  if (!data || data.retornado === "nao") return "";
+  
+  const p = data.pessoa || {};
+  const teltes = (p.telefones || []) as any[];
+  const emails = (p.emails || []) as any[];
+  const enderecos = (p.enderecos || []) as any[];
+  
+  return `
+=== DADOS COMPLEMENTARES SEEKLOC (Unitfour) ===
+Telefones: ${teltes.map(t => `${t.ddd}${t.fone} (${t.tipo || "Fixo"})`).join(", ") || "N/A"}
+E-mails: ${emails.map(e => e.email).join(", ") || "N/A"}
+Endereços Encontrados:
+${enderecos.map(e => `- ${e.logradouro}, ${e.numero} - ${e.bairro} - ${e.cidade}/${e.uf} (CEP: ${e.cep})`).join("\n") || "N/A"}
+=== FIM SEEKLOC ===`;
+}
+
 function getSupabaseAdmin() {
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -1440,6 +1500,18 @@ serve(async (req) => {
         (ibgeData.pib ? `PIB Municipal: R$ ${Number(ibgeData.pib).toLocaleString("pt-BR")} mil (${ibgeData.pib_ano})\n` : "");
     }
 
+    // === NEW: Seekloc Enrichment ===
+    let seeklocData: Record<string, any> | null = null;
+    if (cnpj) {
+      seeklocData = await fetchSeeklocData(cnpj, "1");
+    }
+
+    let seeklocContext = "";
+    if (seeklocData) {
+      seeklocContext = formatSeeklocContext(seeklocData);
+      console.log(`[Seekloc] Data found for ${cnpj || input}`);
+    }
+
     // Scrape the company website for rich content AND social links
     let websiteContent = "";
     let extractedSocialLinks: string[] = [];
@@ -1490,6 +1562,7 @@ ${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
 ${apolloContext ? `\n${apolloContext}\n\nUse os dados do Apollo acima para preencher contatos_abordagem e validar o LinkedIn do sócio principal.` : ""}
 ${ibgeContext ? `\n${ibgeContext}\n\nUse os dados do IBGE para fornecer "contexto_regional" e estimar o ticket médio dos condomínios na região.` : ""}
+${seeklocContext ? `\n${seeklocContext}\n\nUse os dados do Seekloc como fonte secundária e altamente confiável para telefones, e-mails e endereços. Se houver divergência com a Receita Federal, mencione a existência de dados mais recentes no Seekloc.` : ""}
 ${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual. AS FONTES "localizacao_contatos" e "grupo_economico" trazem dados de localização e outras empresas no endereço — use-as para cruzar com o endereço da Receita e preencher grupos_economicos. A FONTE "direct_contacts" traz links diretos do site da empresa — use-a para encontrar WhatsApp e e-mails oficiais.` : ""}
 ${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online. Se houver CONTEÚDO DO SITE, analise-o profundamente para extrair: serviços oferecidos, portfólio de condomínios/imóveis, equipe, diferenciais, tecnologias usadas, e qualquer informação que enriqueça o dossiê e a abordagem comercial.` : ""}
 
@@ -1597,7 +1670,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
         ? ["nome", "cnpj", "situacao", "abertura", "porte", "capital_social", "endereco", "telefone", "atividade_principal", "mapeamento_socios"]
         : [],
       campos_ia: ["redes_sociais", "formacao_academica", "historico_profissional", "linkedin", "background_provavel", "insights_estrategicos", "logica_group_software", "risco_financeiro", "contatos_abordagem", "sinais_crescimento", "tecnologia_atual"],
-      fontes_externas: [...externalSourcesFound, ...(domainData.dominios.length > 0 ? ["dominios_whois"] : [])],
+      fontes_externas: [...externalSourcesFound, ...(domainData.dominios.length > 0 ? ["dominios_whois"] : []), ...(seeklocData ? ["seekloc"] : [])],
       firecrawl_details: [
         ...externalResults.map((r) => ({
           source: r.source,
