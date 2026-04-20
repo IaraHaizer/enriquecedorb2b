@@ -293,6 +293,21 @@ function extractActivityKeywords(cnpjData: Record<string, unknown> | null): stri
   return [...new Set(keywords)].slice(0, 3);
 }
 
+function extractSocialLinksFromMarkdown(markdown: string): string[] {
+  const links: string[] = [];
+  // Procura por links comuns de redes sociais
+  const socialRegex = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|facebook\.com|linkedin\.com\/company|twitter\.com|x\.com|youtube\.com)\/[a-zA-Z0-9.\-_/]+/gi;
+  
+  let match;
+  while ((match = socialRegex.exec(markdown)) !== null) {
+    let url = match[0];
+    if (!url.startsWith("http")) url = "https://" + url;
+    links.push(url);
+  }
+  
+  return [...new Set(links)].slice(0, 10);
+}
+
 async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjData: Record<string, unknown> | null, skipCache = false): Promise<{ dominios: DominioInfo[]; firecrawlDomains: FirecrawlResult }> {
   const candidates = generateCandidateDomains(empresaNome, cnpjData);
   console.log(`[Domains] Candidate domains: ${candidates.join(", ")}`);
