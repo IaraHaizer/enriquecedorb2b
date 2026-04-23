@@ -1481,11 +1481,26 @@ serve(async (req) => {
       }
     }
 
+    const isGenericDomain = (dom: string) => {
+      const genericRegex = /gmail|hotmail|outlook|live|yahoo|icloud|uol|terra|ig\.com|bol\.com|globomail|me\.com/i;
+      return genericRegex.test(dom);
+    };
+
     if (!empresaNome && input_type === "email") {
-      empresaNome = (input as string).split("@")[1]?.split(".")[0] || (input as string);
+      const emailDomain = (input as string).split("@")[1];
+      if (emailDomain && !isGenericDomain(emailDomain)) {
+        empresaNome = emailDomain.split(".")[0];
+      }
     }
+    
     if (!empresaNome) {
-      empresaNome = input as string;
+      if (input_type === "email") {
+        // Se for e-mail genérico e não achamos empresa, o nome da "empresa" pro buscador não deve ser o e-mail todo
+        // Mas sim a parte local do e-mail (pessoa) para tentar achar via OSINT
+        empresaNome = (input as string).split("@")[0].replace(/[._-]/g, " ").trim();
+      } else {
+        empresaNome = input as string;
+      }
     }
 
     // === PARALLEL ENRICHMENT PHASE 1 ===
