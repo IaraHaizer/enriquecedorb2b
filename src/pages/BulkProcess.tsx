@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { generateDossier, type DossierResult, type InputType } from "@/lib/dossier-api";
-import { Upload, Play, Download, Trash2, CheckCircle2, XCircle, Loader2, ArrowLeft, Eye, Printer, FileText, ChevronRight, Radar } from "lucide-react";
+import { Upload, Play, Download, Trash2, CheckCircle2, XCircle, Loader2, ArrowLeft, Eye, Printer, FileText, ChevronRight, Radar, Info } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { DossierDisplay } from "@/components/DossierDisplay";
@@ -207,6 +207,25 @@ export default function BulkProcess() {
                     </Label>
                   </div>
                 </RadioGroup>
+
+                {processMode === "fast" && (
+                  <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-md text-sm text-blue-500 flex gap-2 items-start">
+                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Modo Expresso Ativado</p>
+                      <p className="text-muted-foreground mt-1">Este modo mapeia instantaneamente a Receita Federal, Apollo e Seekloc. Pula varreduras profundas na internet e desliga a redação da Inteligência Artificial. <strong>Ideal para extrair apenas dados como telefones, emails e faturamento em lotes gigantes.</strong></p>
+                    </div>
+                  </div>
+                )}
+                {processMode === "complete" && (
+                  <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md text-sm text-amber-500 flex gap-2 items-start">
+                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Aviso de Performance</p>
+                      <p className="text-muted-foreground mt-1 text-amber-500/80">Este modo gerará o texto analítico de Inteligência Artificial para todos os leads da lista, além de vasculhar a web (LinkedIn, Redes Sociais, Google Notícias). <strong>Pode demorar mais de 40 segundos por Lead. Não recomendado para arquivos muito grandes.</strong></p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 space-y-2">
