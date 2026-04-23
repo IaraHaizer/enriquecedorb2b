@@ -596,7 +596,7 @@ async function fetchIbgeData(codigoIbge: string): Promise<Record<string, unknown
   }
 }
 
-async function fetchSeeklocData(documento: string, tipo: string = "1"): Promise<Record<string, unknown> | null> {
+async function fetchSeeklocData(documento: string): Promise<Record<string, unknown> | null> {
   const user = Deno.env.get("SEEKLOC_USER");
   const pwd = Deno.env.get("SEEKLOC_PWD");
   const emp = Deno.env.get("SEEKLOC_EMP");
@@ -608,31 +608,61 @@ async function fetchSeeklocData(documento: string, tipo: string = "1"): Promise<
 
   try {
     const cleanDoc = documento.replace(/[^\d]/g, "");
-    console.log(`[Seekloc] Querying for document: ${cleanDoc} (type: ${tipo})`);
+    console.log(`[Seekloc] Querying for document: ${cleanDoc} (Step 1: Search)`);
     
-    const body = new URLSearchParams();
-    body.append("usr", user);
-    body.append("pwd", pwd);
-    body.append("emp", emp);
-    body.append("tp", tipo);
-    body.append("doc", cleanDoc);
+    // Passo 1: Buscar o ID interno do Seekloc
+    const form1 = new FormData();
+    form1.append("usr", user);
+    form1.append("pwd", pwd);
+    form1.append("emp", emp);
+    form1.append("tp", "1"); // Busca por documento
+    form1.append("doc", cleanDoc);
 
-    const response = await fetch("http://200.201.193.100/seekloc/ws.php", {
+    const response1 = await fetch("http://200.201.193.100/seekloc/ws.php", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-      },
-      body: body.toString(),
+      body: form1,
     });
 
-    if (!response.ok) {
-      console.warn(`[Seekloc] Error ${response.status}`);
+    if (!response1.ok) {
+      console.warn(`[Seekloc] Step 1 Error ${response1.status}`);
       return null;
     }
 
-    const data = await response.json();
-    return data || null;
+    const data1 = await response1.json();
+    
+    // Verificar se encontrou o documento e tem um ID
+    const seeklocId = data1.docs?.[0]?.id || data1.pessoa?.id;
+    
+    if (!seeklocId) {
+      console.log(`[Seekloc] No ID found for ${cleanDoc}`);
+      return data1; // Retorna o que tiver (provavelmente erro ou vazio)
+    }
+
+    console.log(`[Seekloc] Found ID: ${seeklocId} for ${cleanDoc}. (Step 2: Details)`);
+
+    // Passo 2: Buscar detalhes usando o ID (tp=3 para detalhes completos, conforme Postman do usuario)
+    const form2 = new FormData();
+    form2.append("usr", user);
+    form2.append("pwd", pwd);
+    form2.append("emp", emp);
+    form2.append("tp", "3"); 
+    form2.append("id", seeklocId);
+    form2.append("doc", cleanDoc);
+
+    const response2 = await fetch("http://200.201.193.100/seekloc/ws.php", {
+      method: "POST",
+      body: form2,
+    });
+
+    if (!response2.ok) {
+      console.warn(`[Seekloc] Step 2 Error ${response2.status}`);
+      return data1; // Fallback para data1
+    }
+
+    const data2 = await response2.json();
+    console.log(`[Seekloc] Step 2 Success. Data points found.`);
+    return data2 || data1;
+
   } catch (err) {
     console.warn("[Seekloc] Fetch error:", err);
     return null;
@@ -640,19 +670,45 @@ async function fetchSeeklocData(documento: string, tipo: string = "1"): Promise<
 }
 
 function formatSeeklocContext(data: any): string {
-  if (!data || data.retornado === "nao") return "";
+  if (!data) return "";
+  
+  // No Postman do usuário, Sucesso é codocor: "0"
+  const ocorrencia = data.ocorrencia || {};
+  if (ocorrencia.codocor !== "0") {
+    console.log(`[Seekloc] API returned non-zero code: ${ocorrencia.codocor} - ${ocorrencia.msgocor}`);
+    return "";
+  }
   
   const p = data.pessoa || {};
-  const teltes = (p.telefones || []) as any[];
-  const emails = (p.emails || []) as any[];
-  const enderecos = (p.enderecos || []) as any[];
+  
+  // Mapear Telefones (No Postman: { fixo: [], celulares: [] })
+  const telefonesObj = p.telefones || {};
+  const fixos = Array.isArray(telefonesObj.fixo) ? telefonesObj.fixo : [];
+  const celulares = Array.isArray(telefonesObj.celulares) ? telefonesObj.celulares : [];
+  
+  const phonesList: string[] = [];
+  fixos.forEach((t: any) => phonesList.push(`(${t.ddd}) ${t.fone} [Fixo]`));
+  celulares.forEach((t: any) => phonesList.push(`(${t.ddd}) ${t.fone} [Celular]`));
+
+  // Mapear E-mails (No Postman: Array direto)
+  const emailsArr = Array.isArray(p.emails) ? p.emails : [];
+  const emailsList = emailsArr.map((e: any) => e.email).filter(Boolean);
+
+  // Mapear Endereços (No Postman: { endereco: [] })
+  const enderecosObj = p.enderecos || {};
+  const addressesArr = Array.isArray(enderecosObj.endereco) ? enderecosObj.endereco : [];
+  const addressLines = addressesArr.map((e: any) => 
+    `- ${e.tipo || ""} ${e.logradouro || ""}, ${e.numero || ""} ${e.complemento || ""} - ${e.bairro || ""} - ${e.cidade || ""}/${e.uf || ""} (CEP: ${e.cep || ""})`
+  );
   
   return `
 === DADOS COMPLEMENTARES SEEKLOC (Unitfour) ===
-Telefones: ${teltes.map(t => `${t.ddd}${t.fone} (${t.tipo || "Fixo"})`).join(", ") || "N/A"}
-E-mails: ${emails.map(e => e.email).join(", ") || "N/A"}
-Endereços Encontrados:
-${enderecos.map(e => `- ${e.logradouro}, ${e.numero} - ${e.bairro} - ${e.cidade}/${e.uf} (CEP: ${e.cep})`).join("\n") || "N/A"}
+Pessoa/Empresa: ${p.nome || "N/I"}
+Documento: ${p.doc || "N/I"}
+Telefones Encontrados: ${phonesList.join(", ") || "N/A"}
+E-mails Encontrados: ${emailsList.join(", ") || "N/A"}
+Endereços Registrados:
+${addressLines.join("\n") || "N/A"}
 === FIM SEEKLOC ===`;
 }
 
@@ -1481,7 +1537,7 @@ serve(async (req) => {
         firecrawlSearch(`"${personNomeDerivado}" site:linkedin.com/in`, "person_linkedin", { limit: isFastMode ? 2 : 3 }),
         !isFastMode ? firecrawlSearch(`"${personNomeDerivado}" site:instagram.com`, "person_instagram", { limit: 2 }) : Promise.resolve(null),
       ]) : Promise.resolve(null),
-      cnpj ? fetchSeeklocData(cnpj, "1") : Promise.resolve(null),
+      cnpj ? fetchSeeklocData(cnpj) : Promise.resolve(null),
       cnpjDataRef?.codigo_municipio_ibge ? fetchIbgeData(cnpjDataRef.codigo_municipio_ibge as string) : Promise.resolve(null)
     ]);
 
