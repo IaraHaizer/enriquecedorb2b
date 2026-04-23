@@ -1336,7 +1336,6 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    }
     const { input, input_type, skip_cache, process_mode } = parsedBody;
     const isFastMode = process_mode === "fast";
 
