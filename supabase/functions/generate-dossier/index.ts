@@ -728,7 +728,8 @@ async function fetchExternalSources(
   dominio?: string,
   cnpj?: string | null,
   endereco?: string,
-  skipCache = false
+  skipCache = false,
+  isFastMode = false
 ): Promise<FirecrawlResult[]> {
   const searchName = empresaNome || cnpj || "";
   if (!searchName) return [];
@@ -757,18 +758,23 @@ async function fetchExternalSources(
     { name: "localizacao_contatos", query: `"${brandName}" site:casadosdados.com.br OR site:econodata.com.br OR site:cnpja.com`, opts: { limit: 3 } },
   ];
 
+  // In Fast Mode, we skip most extensive searches to save time and credits
+  const filteredSources = isFastMode 
+    ? sources.filter(s => ["linkedin", "jusbrasil_escavador", "localizacao_contatos"].includes(s.name))
+    : sources;
+
   if (dominio) {
-    sources.push({
+    filteredSources.push({
       name: "direct_contacts",
       query: `site:${dominio} "whatsapp" OR "fale conosco" OR "contato" OR "sac"`,
       opts: { limit: 2 }
     });
   }
 
-  if (endereco) {
+  if (endereco && !isFastMode) {
     const cleanAddr = endereco.replace(/\d{5}-\d{3}/, "").replace(/\b(sala|andar|bloco|loja|galpao|andar|mezzanino)\b.*$/i, "").trim();
     if (cleanAddr.length > 10) {
-      sources.push({ 
+      filteredSources.push({ 
         name: "grupo_economico", 
         query: `"${cleanAddr}" site:casadosdados.com.br OR site:econodata.com.br "outras empresas"`, 
         opts: { limit: 3 } 
@@ -777,7 +783,7 @@ async function fetchExternalSources(
   }
 
   const results = await Promise.all(
-    sources.map(async (s) => {
+    filteredSources.map(async (s) => {
       const cacheKey = buildCacheKey(empresaNome, cnpj, s.name);
       if (!skipCache) {
         const cached = await getCachedResult(cacheKey);
@@ -1274,7 +1280,9 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const { input, input_type, skip_cache } = parsedBody;
+    }
+    const { input, input_type, skip_cache, process_mode } = parsedBody;
+    const isFastMode = process_mode === "fast";
 
     if (!input || !input_type) {
       return new Response(
@@ -1467,11 +1475,11 @@ serve(async (req) => {
     // Disparar consultas independentes
     const [domainData, externalResults, externalPersonResults, seeklocData, ibgeData] = await Promise.all([
       fetchDomainInfo(empresaNome, cnpj, cnpjDataRef, !!skip_cache),
-      fetchExternalSources(empresaNome, nomeFantasia, null, cnpj, enderecoCompleto, !!skip_cache),
-      // Buscas focadas na PESSOA para input tipo email
+      fetchExternalSources(empresaNome, nomeFantasia, null, cnpj, enderecoCompleto, !!skip_cache, isFastMode),
+      // Buscas focadas na PESSOA para input tipo email (reduzir no FastMode)
       personNomeDerivado && personNomeDerivado.length > 4 ? Promise.all([
-        firecrawlSearch(`"${personNomeDerivado}" site:linkedin.com/in`, "person_linkedin", { limit: 3 }),
-        firecrawlSearch(`"${personNomeDerivado}" site:instagram.com`, "person_instagram", { limit: 2 }),
+        firecrawlSearch(`"${personNomeDerivado}" site:linkedin.com/in`, "person_linkedin", { limit: isFastMode ? 2 : 3 }),
+        !isFastMode ? firecrawlSearch(`"${personNomeDerivado}" site:instagram.com`, "person_instagram", { limit: 2 }) : Promise.resolve(null),
       ]) : Promise.resolve(null),
       cnpj ? fetchSeeklocData(cnpj, "1") : Promise.resolve(null),
       cnpjDataRef?.codigo_municipio_ibge ? fetchIbgeData(cnpjDataRef.codigo_municipio_ibge as string) : Promise.resolve(null)
@@ -1500,7 +1508,7 @@ serve(async (req) => {
     }
 
     // Website scrape needs domain
-    if (mainDomain) {
+    if (mainDomain && !isFastMode) {
       const websiteUrl = `https://www.${mainDomain}`;
       const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
       if (apiKey) {
@@ -1605,72 +1613,179 @@ LEMBRETE OBRIGATÓRIO:
 
 Analise profundamente e retorne o JSON estruturado conforme o formato especificado.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userMessage },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns instantes." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Créditos insuficientes. Adicione fundos em Settings > Workspace > Usage." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      return new Response(
-        JSON.stringify({ error: "Erro ao gerar dossiê" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const aiText = await response.text();
-    let aiData;
-    try {
-      aiData = JSON.parse(aiText);
-    } catch {
-      console.error("Failed to parse AI response:", aiText?.slice(0, 500));
-      return new Response(
-        JSON.stringify({ error: "Erro ao processar resposta da IA (parsing)" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    const content = aiData.choices?.[0]?.message?.content;
-
-    if (!content) {
-      return new Response(
-        JSON.stringify({ error: "Resposta vazia da IA" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     let dossier;
-    try {
-      const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      dossier = JSON.parse(cleaned);
-    } catch {
-      console.error("Failed to parse AI response as JSON:", content);
-      return new Response(
-        JSON.stringify({ error: "Erro ao processar resposta da IA", raw: content }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+    if (isFastMode) {
+      console.log("[Fast Mode] Skipping AI inference, generating static dossier.");
+      dossier = {
+        empresa: {
+          nome: empresaNome || "Não identificado",
+          cnpj: cnpj || "Não identificado",
+          situacao: cnpjDataRef?.descricao_situacao_cadastral || "Não identificado",
+          abertura: cnpjDataRef?.data_inicio_atividade || "Não identificado",
+          porte: cnpjDataRef?.porte || cnpjDataRef?.descricao_porte || "Não identificado",
+          capital_social: cnpjDataRef?.capital_social ? `R$ ${Number(cnpjDataRef.capital_social).toLocaleString("pt-BR")}` : "Não identificado",
+          endereco: cnpjDataRef ? `${cnpjDataRef.logradouro || ""} ${cnpjDataRef.numero || ""}, ${cnpjDataRef.municipio || ""}/${cnpjDataRef.uf || ""}` : "Não identificado",
+          telefone: cnpjDataRef?.ddd_telefone_1 || "Não identificado",
+          redes_sociais: "Verificado no dashboard",
+          reputacao: "Busca ignorada (Fast Mode)",
+          atividade_principal: cnpjDataRef?.cnae_fiscal_descricao || "Não identificado",
+          tecnologia_atual: "Busca ignorada (Fast Mode)",
+          grupos_economicos: { identificado: false, detalhes: "Busca ignorada" },
+          status_integridade: { nivel: cnpjDataRef ? "Suficiente" : "Insuficiente", motivo: "Modo de processo em lote. IA desligada.", is_provisorio: true }
+        },
+        socio_principal: {
+          nome: personFirstName ? `${personFirstName} ${personLastName}` : (cnpjDataRef?.qsa as any[])?.[0]?.nome || "Não identificado",
+          cargo: (cnpjDataRef?.qsa as any[])?.[0]?.qual || "Sócio(a)",
+          formacao_academica: "Busca ignorada",
+          historico_profissional: "Busca ignorada",
+          linkedin: "N/I",
+          background_provavel: "N/I",
+          is_pep: false,
+          pep_detalhes: ""
+        },
+        mapeamento_socios: (cnpjDataRef?.qsa as any[])?.map(s => ({
+          nome: s.nome || "N/I",
+          cargo: s.qual || "N/I",
+          background_provavel: "N/I",
+          is_pep: false,
+          pep_detalhes: ""
+        })) || [],
+        fontes_externas: {
+          reclame_aqui: { encontrado: false, resumo: "N/A", url: "" },
+          processos_judiciais: { encontrado: false, resumo: "N/A", url: "" },
+          linkedin: { encontrado: false, resumo: "N/A", url: "" },
+          instagram: { encontrado: false, resumo: "N/A", url: "" },
+          facebook: { encontrado: false, resumo: "N/A", url: "" },
+          youtube: { encontrado: false, resumo: "N/A", url: "" },
+          twitter: { encontrado: false, resumo: "N/A", url: "" },
+          noticias: { encontrado: false, resumo: "N/A", urls: [] }
+        },
+        risco_financeiro: { protestos: { encontrado: false, resumo: "N/A", quantidade_estimada: 0 }, negativacoes: { encontrado: false, resumo: "N/A" }, regularidade_fiscal: "N/A", nivel_risco: "Baixo" },
+        contatos_abordagem: [],
+        sinais_crescimento: [],
+        insights_estrategicos: {
+          janela_oportunidade: "Busca ignorada",
+          abordagem_personalizada: { canal_ideal: "LinkedIn / E-mail", tom_de_voz: "Formatado", argumento_central: "N/A" },
+          ressonancia_por_perfil: [],
+          o_que_evitar: "N/A",
+          contexto_regional: ibgeData ? `População: ${ibgeData.populacao} - PIB: ${ibgeData.pib}` : "N/I"
+        },
+        logica_group_software: {
+          analise_fit: "Sem Análise de IA",
+          modulos_sugeridos: [],
+          gancho_venda: "Modo Expresso (Apenas Dados)",
+          recomendacao_principal: "Análise não realizada. Modo em lote focado em contatos.",
+          produtos_sugeridos: [],
+          justificativa: "Modo Fast não gera argumentação."
+        }
+      };
+
+      // Populate contatos from Apollo if found
+      if (apolloData && apolloData.email) {
+        dossier.contatos_abordagem.push({
+          nome: `${apolloData.first_name} ${apolloData.last_name}`,
+          cargo: apolloData.title || apolloData.job_title || "Não informado",
+          canal: "Email corporativo",
+          contato: apolloData.email,
+          fonte: "Apollo",
+          is_apollo_verified: true
+        });
+      }
+      // Populate contatos from Seekloc if found
+      if (seeklocData && seeklocData.pessoa) {
+         const p = seeklocData.pessoa;
+         if (p.telefones) {
+            (p.telefones as any[]).forEach(t => {
+               dossier.contatos_abordagem.push({
+                  nome: "Contato da Empresa",
+                  cargo: t.tipo || "Telefone",
+                  canal: "Telefone",
+                  contato: `(${t.ddd}) ${t.fone}`,
+                  fonte: "Unitfour"
+               });
+            });
+         }
+         if (p.emails) {
+            (p.emails as any[]).forEach(e => {
+               dossier.contatos_abordagem.push({
+                  nome: "Contato da Empresa",
+                  cargo: "Email",
+                  canal: "Email corporativo",
+                  contato: e.email,
+                  fonte: "Unitfour"
+               });
+            });
+         }
+      }
+
+    } else {
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userMessage },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          return new Response(
+            JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns instantes." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (response.status === 402) {
+          return new Response(
+            JSON.stringify({ error: "Créditos insuficientes. Adicione fundos em Settings > Workspace > Usage." }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const errorText = await response.text();
+        console.error("AI gateway error:", response.status, errorText);
+        return new Response(
+          JSON.stringify({ error: "Erro ao gerar dossiê" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const aiText = await response.text();
+      let aiData;
+      try {
+        aiData = JSON.parse(aiText);
+      } catch {
+        console.error("Failed to parse AI response:", aiText?.slice(0, 500));
+        return new Response(
+          JSON.stringify({ error: "Erro ao processar resposta da IA (parsing)" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const content = aiData.choices?.[0]?.message?.content;
+
+      if (!content) {
+        return new Response(
+          JSON.stringify({ error: "Resposta vazia da IA" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      try {
+        const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        dossier = JSON.parse(cleaned);
+      } catch {
+        console.error("Failed to parse AI response as JSON:", content);
+        return new Response(
+          JSON.stringify({ error: "Erro ao processar resposta da IA", raw: content }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Inject domain data directly into dossier (not AI-generated)

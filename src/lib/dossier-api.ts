@@ -178,9 +178,12 @@ export interface DossierHistoryItem {
   dossier_data: Dossier;
 }
 
-export async function generateDossier(input: string, inputType: InputType, skipCache = false): Promise<DossierResult> {
+// Define Process Mode for Fast (Data only) or Complete (Textual AI)
+export type ProcessMode = "complete" | "fast";
+
+export async function generateDossier(input: string, inputType: InputType, skipCache = false, processMode: ProcessMode = "complete"): Promise<DossierResult> {
   const { data, error } = await supabase.functions.invoke("generate-dossier", {
-    body: { input, input_type: inputType, skip_cache: skipCache },
+    body: { input, input_type: inputType, skip_cache: skipCache, process_mode: processMode },
   });
 
   if (error) {

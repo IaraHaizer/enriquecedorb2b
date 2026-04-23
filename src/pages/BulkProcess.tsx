@@ -30,6 +30,7 @@ export default function BulkProcess() {
   const [selectedResult, setSelectedResult] = useState<DossierResult | null>(null);
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
   const [printMode, setPrintMode] = useState<"estrategico" | "completo">("estrategico");
+  const [processMode, setProcessMode] = useState<"complete" | "fast">("fast");
   const navigate = useNavigate();
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,7 +75,7 @@ export default function BulkProcess() {
         setItems(prev => prev.map((it, idx) => idx === i ? { ...it, status: "processing" } : it));
 
         try {
-            const result = await generateDossier(item.input, item.type);
+            const result = await generateDossier(item.input, item.type, false, processMode);
             setItems(prev => prev.map((it, idx) => idx === i ? { ...it, status: "completed", result } : it));
         } catch (error) {
             setItems(prev => prev.map((it, idx) => idx === i ? { ...it, status: "error", error: error instanceof Error ? error.message : "Erro desconhecido" } : it));
@@ -187,6 +188,25 @@ export default function BulkProcess() {
                     <Upload className="h-4 w-4" /> Carregar Arquivo
                   </Button>
                 </div>
+              </div>
+              <div className="pt-2 space-y-2">
+                <Label className="text-xs text-muted-foreground">Profundidade da Busca:</Label>
+                <RadioGroup defaultValue="fast" value={processMode} onValueChange={(v) => setProcessMode(v as "complete" | "fast")} disabled={isProcessing} className="flex flex-col gap-2">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="fast" id="mode-fast" />
+                    <Label htmlFor="mode-fast" className="flex flex-col cursor-pointer">
+                      <span>Expresso (Recomendado para Lote)</span>
+                      <span className="text-xs text-muted-foreground font-normal">Apenas dados de contato e faturamento. Maior velocidade (~3s/lead).</span>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="complete" id="mode-complete" />
+                    <Label htmlFor="mode-complete" className="flex flex-col cursor-pointer">
+                      <span>Profundo (Com Inteligência Artificial)</span>
+                      <span className="text-xs text-muted-foreground font-normal">Scraping completo e redação por IA. Mais lento (~40s/lead).</span>
+                    </Label>
+                  </div>
+                </RadioGroup>
               </div>
 
               <div className="pt-4 space-y-2">
