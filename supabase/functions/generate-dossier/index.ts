@@ -7,6 +7,17 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ==================== HELPERS ====================
+
+const GENERIC_DOMAINS = /gmail|hotmail|outlook|live|yahoo|icloud|uol|terra|ig\.com|bol\.com|globomail|me\.com|apple|google|microsoft|googlemail|protonmail|zohomail/i;
+
+function isGenericDomain(dom: string): boolean {
+  if (!dom) return false;
+  // Limpar dominio de TLDs para checagem mais assertiva (ex: gmail.com -> gmail)
+  const cleanDom = dom.split('.')[0].toLowerCase();
+  return GENERIC_DOMAINS.test(cleanDom) || GENERIC_DOMAINS.test(dom.toLowerCase());
+}
+
 // ==================== RECEITA FEDERAL (BrasilAPI) ====================
 
 async function fetchCnpjData(cnpj: string): Promise<Record<string, unknown> | null> {
@@ -309,6 +320,10 @@ function extractSocialLinksFromMarkdown(markdown: string): string[] {
 }
 
 async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjData: Record<string, unknown> | null, skipCache = false): Promise<{ dominios: DominioInfo[]; firecrawlDomains: FirecrawlResult }> {
+  if (isGenericDomain(empresaNome)) {
+    console.log(`[Domains] CRITICAL: Skipping domain fetch for generic/provider name: "${empresaNome}"`);
+    return { dominios: [], firecrawlDomains: { source: "dominios_whois", query: "", results: [] } };
+  }
   const candidates = generateCandidateDomains(empresaNome, cnpjData);
   console.log(`[Domains] Candidate domains: ${candidates.join(", ")}`);
 
@@ -1366,31 +1381,39 @@ serve(async (req) => {
     // === NEW EMAIL FLOW ===
     if (emailInput) {
       console.log(`[Email Flow] Starting search for email: ${emailInput}`);
+      const domainFromEmail = emailInput.split("@")[1];
+      
       // 1. Try Apollo to find company from email
       const apolloInitial = await fetchApolloEnrichment({ email: emailInput });
       if (apolloInitial?.organization) {
         const org: any = apolloInitial.organization;
-        empresaNome = org.name;
         const orgDomain = org.primary_domain;
-        console.log(`[Email Flow] Apollo found company: "${empresaNome}" | Domain: ${orgDomain}`);
         
-        // 2. Try to find CNPJ for this company
-        const cnpjSearch = await firecrawlSearch(
-          `CNPJ "${empresaNome}" site:cnpj.biz OR site:casadosdados.com.br`,
-          "email_to_cnpj", { limit: 2 }
-        );
-        const cnpjMatch = cnpjSearch.results.map(r => r.title + r.description).join(" ").match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
-        if (cnpjMatch) {
-          cnpj = cnpjMatch[0];
-          console.log(`[Email Flow] Deduced CNPJ: ${cnpj}`);
+        // SÓ ACEITA O NOME DA EMPRESA DO APOLLO SE NÃO FOR UM DOMÍNIO GENÉRICO
+        // (Evita que iarahaizero@gmail.com vire "Google")
+        if (!isGenericDomain(orgDomain) && !isGenericDomain(org.name)) {
+          empresaNome = org.name;
+          console.log(`[Email Flow] Apollo found valid company: "${empresaNome}" | Domain: ${orgDomain}`);
+          
+          // 2. Try to find CNPJ for this company
+          const cnpjSearch = await firecrawlSearch(
+            `CNPJ "${empresaNome}" site:cnpj.biz OR site:casadosdados.com.br`,
+            "email_to_cnpj", { limit: 2 }
+          );
+          const cnpjMatch = cnpjSearch.results.map(r => r.title + r.description).join(" ").match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
+          if (cnpjMatch) {
+            cnpj = cnpjMatch[0];
+            console.log(`[Email Flow] Deduced CNPJ: ${cnpj}`);
+          }
+        } else {
+          console.log(`[Email Flow] Apollo returned a generic organization (${org.name}), ignoring company data.`);
         }
       } else {
-        // Fallback: use domain from email
-        const domain = emailInput.split("@")[1];
-        if (domain && !domain.match(/gmail|hotmail|outlook|yahoo|uol|bol|terra|ig\.com/i)) {
-          console.log(`[Email Flow] Domain fallback: ${domain}`);
+        // Fallback: use domain from email only if NOT generic
+        if (domainFromEmail && !isGenericDomain(domainFromEmail)) {
+          console.log(`[Email Flow] Domain fallback: ${domainFromEmail}`);
           const domainSearch = await firecrawlSearch(
-             `CNPJ "${domain}" site:registro.br OR site:cnpj.biz`,
+             `CNPJ "${domainFromEmail}" site:registro.br OR site:cnpj.biz`,
              "domain_to_cnpj", { limit: 2 }
           );
           const cnpjMatch = domainSearch.results.map(r => r.title + r.description).join(" ").match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
@@ -1481,11 +1504,6 @@ serve(async (req) => {
       }
     }
 
-    const isGenericDomain = (dom: string) => {
-      const genericRegex = /gmail|hotmail|outlook|live|yahoo|icloud|uol|terra|ig\.com|bol\.com|globomail|me\.com/i;
-      return genericRegex.test(dom);
-    };
-
     if (!empresaNome && input_type === "email") {
       const emailDomain = (input as string).split("@")[1];
       if (emailDomain && !isGenericDomain(emailDomain)) {
@@ -1493,11 +1511,12 @@ serve(async (req) => {
       }
     }
     
-    if (!empresaNome) {
+    if (!empresaNome || (input_type === "email" && empresaNome.includes("@"))) {
       if (input_type === "email") {
-        // Se for e-mail genérico e não achamos empresa, o nome da "empresa" pro buscador não deve ser o e-mail todo
-        // Mas sim a parte local do e-mail (pessoa) para tentar achar via OSINT
+        // Fallback final para e-mail: usar a parte do nome (antes do @) para tentar achar a pessoa 
+        // e NÃO o domínio genérico ou o e-mail completo
         empresaNome = (input as string).split("@")[0].replace(/[._-]/g, " ").trim();
+        console.log(`[Flow] Final fallback for generic/unknown email. Focus on: ${empresaNome}`);
       } else {
         empresaNome = input as string;
       }
@@ -1633,6 +1652,12 @@ serve(async (req) => {
 
     let apolloContext = "";
     if (apolloData) {
+      const orgName = (apolloData.organization as any)?.name || "";
+      const orgDomain = (apolloData.organization as any)?.primary_domain || "";
+      
+      // BLOQUEIO CRÍTICO: Se o Apollo retornar Google/Microsoft como empresa para um e-mail pessoal, ignoramos.
+      const isGenericOrg = isGenericDomain(orgName) || isGenericDomain(orgDomain);
+      
       apolloContext = `\n=== DADOS ENRIQUECIDOS APOLLO (SOCIO/CONTATO) ===\n` +
         `Nome: ${apolloData.first_name} ${apolloData.last_name}\n` +
         `Cargo: ${apolloData.title || apolloData.job_title || "Não informado"}\n` +
@@ -1640,7 +1665,14 @@ serve(async (req) => {
         `Twitter: ${apolloData.twitter_url || "Não informado"}\n` +
         `E-mail Corporativo: ${apolloData.email || "Não informado"}\n` +
         `Status E-mail: ${apolloData.email_status || "Não informado"}\n` +
-        (apolloData.organization ? `Empresa no Apollo: ${(apolloData.organization as any).name}\n` : "");
+        (apolloData.organization && !isGenericOrg ? `Empresa no Apollo: ${orgName}\n` : "");
+    }
+
+    // Limpeza extra para e-mails pessoais: Se o domínio for genérico, removemos qualquer domínio associado que aponte para o provedor
+    const isPersonalEmail = input_type === "email" && isGenericDomain((input as string).split("@")[1]);
+    if (isPersonalEmail && domainData.dominios.length > 0) {
+      domainData.dominios = domainData.dominios.filter(d => !isGenericDomain(d.dominio) && !isGenericDomain(d.registrante || ""));
+      console.log(`[Filter] Filtered out provider domains from personal email context. Remaining: ${domainData.dominios.length}`);
     }
 
     let ibgeContext = "";
@@ -1667,6 +1699,11 @@ serve(async (req) => {
     const userMessage = `Gere o dossiê completo ENRIQUECIDO para o seguinte lead:
 Tipo de input: ${input_type}
 Dado fornecido: ${input}
+
+⚠️ REGRAS DE OURO PARA ESTE LEAD:
+1. SE O E-MAIL FOR @GMAIL, @HOTMAIL, @OUTLOOK, ETC: É estritamente PROIBIDO dizer que a empresa dele é a Google ou Microsoft. FOQUE NA PESSOA e trate a empresa como "Não identificado" se não houver um CNPJ comercial real.
+2. NUNCA sugira produtos Group Software para a própria Google. O objetivo é analisar o profissional "iarahaizer" e suas possíveis atividades independentes.
+3. Se o nome da empresa parecer um provedor de e-mail, IGNORE e foque no indivíduo.
 ${internalDomainWarning}${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome → LinkedIn → Empresa → CNPJ) ===${cascadeContext}\n=== FIM CASCATA ===` : ""}
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
 ${apolloContext ? `\n${apolloContext}\n\nUse os dados do Apollo acima para preencher contatos_abordagem e validar o LinkedIn do sócio principal.` : ""}
