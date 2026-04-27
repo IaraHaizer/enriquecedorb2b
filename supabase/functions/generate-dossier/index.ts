@@ -526,47 +526,17 @@ async function firecrawlSearch(query: string, sourceName: string, options?: { li
   }
 }
 
-async function fetchApolloEnrichment(options: { 
-  firstName?: string; 
-  lastName?: string; 
-  email?: string; 
-  domain?: string; 
+// Apollo desativado temporariamente (plano free não permite /people/match).
+// Enriquecimento de pessoas/contatos agora é feito via Seekloc (Unitfour).
+// Mantemos a assinatura para não quebrar o fluxo existente.
+async function fetchApolloEnrichment(_options: {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  domain?: string;
 }): Promise<Record<string, unknown> | null> {
-  const apiKey = Deno.env.get("APOLLO_API_KEY");
-  if (!apiKey) {
-    console.warn("[Apollo] API key not configured");
-    return null;
-  }
-
-  try {
-    console.log(`[Apollo] Enriching: ${options.email || `${options.firstName} ${options.lastName} @ ${options.domain}`}`);
-    const response = await fetch("https://api.apollo.io/v1/people/match", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        "X-Api-Key": apiKey,
-      },
-      body: JSON.stringify({
-        first_name: options.firstName,
-        last_name: options.lastName,
-        email: options.email,
-        domain: options.domain,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.warn(`[Apollo] Error ${response.status}: ${errText}`);
-      return null;
-    }
-
-    const data = await response.json();
-    return (data.person as Record<string, unknown>) || null;
-  } catch (err) {
-    console.warn("[Apollo] Fetch error:", err);
-    return null;
-  }
+  console.log("[Apollo] Disabled — usando Seekloc para enriquecimento de contatos.");
+  return null;
 }
 
 async function fetchIbgeData(codigoIbge: string): Promise<Record<string, unknown> | null> {
