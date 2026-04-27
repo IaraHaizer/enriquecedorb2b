@@ -266,7 +266,9 @@ function generateCandidateDomains(empresaNome: string, cnpjData: Record<string, 
     }
   }
 
-  return [...new Set(candidates)].slice(0, 12);
+  return [...new Set(candidates)]
+    .filter(d => !isGenericDomain(d))
+    .slice(0, 12);
 }
 
 function extractActivityKeywords(cnpjData: Record<string, unknown> | null): string[] {
@@ -387,7 +389,8 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
     let match;
     while ((match = domainRegex.exec(text)) !== null) {
       const d = match[1].toLowerCase();
-      if (!d.match(/registro\.br|google|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame/)) {
+      // FILTRO RIGOROSO: Nunca aceitar domínios de provedores ou redes sociais como domínios "associados" da empresa
+      if (!isGenericDomain(d) && !d.match(/registro\.br|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|linktr/)) {
         extraDomains.add(d);
       }
     }
@@ -395,7 +398,7 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
     if (r.url) {
       try {
         const urlDomain = new URL(r.url).hostname.replace(/^www\./, "");
-        if (!urlDomain.match(/google|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|registro\.br/)) {
+        if (!isGenericDomain(urlDomain) && !urlDomain.match(/facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|registro\.br|linktr/)) {
           extraDomains.add(urlDomain);
         }
       } catch { /* ignore */ }
@@ -1405,22 +1408,26 @@ serve(async (req) => {
             cnpj = cnpjMatch[0];
             console.log(`[Email Flow] Deduced CNPJ: ${cnpj}`);
           }
-        } else {
-          console.log(`[Email Flow] Apollo returned a generic organization (${org.name}), ignoring company data.`);
         }
-      } else {
-        // Fallback: use domain from email only if NOT generic
-        if (domainFromEmail && !isGenericDomain(domainFromEmail)) {
-          console.log(`[Email Flow] Domain fallback: ${domainFromEmail}`);
-          const domainSearch = await firecrawlSearch(
-             `CNPJ "${domainFromEmail}" site:registro.br OR site:cnpj.biz`,
-             "domain_to_cnpj", { limit: 2 }
-          );
-          const cnpjMatch = domainSearch.results.map(r => r.title + r.description).join(" ").match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
-          if (cnpjMatch) {
-            cnpj = cnpjMatch[0];
-            console.log(`[Email Flow] Found CNPJ via domain: ${cnpj}`);
-          }
+      }
+
+      // NOVO: PIVOT SEARCH PARA E-MAILS GENÉRICOS
+      // Se for @gmail/etc e ainda não temos CNPJ, tentamos achar a empresa baseada no nome do e-mail
+      if (!cnpj && isGenericDomain(domainFromEmail)) {
+        const localPart = emailInput.split("@")[0].replace(/[._-]/g, " ").trim();
+        console.log(`[Email Flow] Generic email pivot search for: "${localPart}"`);
+        
+        const pivotSearch = await firecrawlSearch(
+          `"${localPart}" CNPJ site:cnpj.biz OR site:casadosdados.com.br`, 
+          "email_pivot_cnpj", { limit: 2 }
+        );
+        const cnpjMatch = pivotSearch.results.map(r => r.title + r.description).join(" ").match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
+        if (cnpjMatch) {
+          cnpj = cnpjMatch[0];
+          console.log(`[Email Flow] Pivot found CNPJ: ${cnpj}`);
+        } else {
+          // Se não achou CNPJ, seta como nome pra busca de pessoa posterior
+          empresaNome = localPart;
         }
       }
     }
