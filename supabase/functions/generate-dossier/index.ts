@@ -1333,6 +1333,7 @@ serve(async (req) => {
     let cascadeContext = "";
     let cnpj = extractCnpj(input as string, input_type as string);
     let cnpjDataRef: Record<string, unknown> | null = null;
+    let seeklocDataDirect: Record<string, any> | null = null;
     let emailInput = input_type === "email" ? (input as string) : null;
 
     // === NEW EMAIL FLOW ===
