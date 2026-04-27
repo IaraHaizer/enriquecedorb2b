@@ -672,7 +672,7 @@ export function DossierDisplay({ dossier, dataSources, leadScore, forceShowTechn
                       {c.canal}
                     </Badge>
                     {c.fonte && (
-                      <Badge variant="ghost" className="text-[9px] opacity-60 ml-1 px-1">
+                      <Badge variant="outline" className="text-[9px] opacity-60 ml-1 px-1">
                         {c.fonte}
                       </Badge>
                     )}
