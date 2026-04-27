@@ -614,7 +614,7 @@ async function fetchIbgeData(codigoIbge: string): Promise<Record<string, unknown
   }
 }
 
-async function fetchSeeklocData(documento: string): Promise<Record<string, unknown> | null> {
+async function fetchSeeklocData(params: { documento?: string; email?: string; nome?: string }): Promise<Record<string, any> | null> {
   const user = Deno.env.get("SEEKLOC_USER");
   const pwd = Deno.env.get("SEEKLOC_PWD");
   const emp = Deno.env.get("SEEKLOC_EMP");
@@ -625,16 +625,24 @@ async function fetchSeeklocData(documento: string): Promise<Record<string, unkno
   }
 
   try {
-    const cleanDoc = documento.replace(/[^\d]/g, "");
-    console.log(`[Seekloc] Querying for document: ${cleanDoc} (Step 1: Search)`);
+    console.log(`[Seekloc] Querying for: ${JSON.stringify(params)} (Step 1: Search)`);
     
     // Passo 1: Buscar o ID interno do Seekloc
     const form1 = new FormData();
     form1.append("usr", user);
     form1.append("pwd", pwd);
     form1.append("emp", emp);
-    form1.append("tp", "1"); // Busca por documento
-    form1.append("doc", cleanDoc);
+    form1.append("tp", "1"); 
+
+    if (params.documento) {
+      form1.append("doc", params.documento.replace(/[^\d]/g, ""));
+    } else if (params.email) {
+      form1.append("mail", params.email);
+    } else if (params.nome) {
+      form1.append("nm", params.nome);
+    } else {
+      return null;
+    }
 
     const response1 = await fetch("http://200.201.193.100/seekloc/ws.php", {
       method: "POST",
@@ -650,22 +658,23 @@ async function fetchSeeklocData(documento: string): Promise<Record<string, unkno
     
     // Verificar se encontrou o documento e tem um ID
     const seeklocId = data1.docs?.[0]?.id || data1.pessoa?.id;
+    const foundDoc = params.documento?.replace(/[^\d]/g, "") || data1.docs?.[0]?.doc || data1.pessoa?.doc;
     
     if (!seeklocId) {
-      console.log(`[Seekloc] No ID found for ${cleanDoc}`);
-      return data1; // Retorna o que tiver (provavelmente erro ou vazio)
+      console.log(`[Seekloc] No ID found for search criteria.`);
+      return data1; 
     }
 
-    console.log(`[Seekloc] Found ID: ${seeklocId} for ${cleanDoc}. (Step 2: Details)`);
+    console.log(`[Seekloc] Found ID: ${seeklocId}. (Step 2: Details)`);
 
-    // Passo 2: Buscar detalhes usando o ID (tp=3 para detalhes completos, conforme Postman do usuario)
+    // Passo 2: Buscar detalhes usando o ID
     const form2 = new FormData();
     form2.append("usr", user);
     form2.append("pwd", pwd);
     form2.append("emp", emp);
     form2.append("tp", "3"); 
     form2.append("id", seeklocId);
-    form2.append("doc", cleanDoc);
+    if (foundDoc) form2.append("doc", foundDoc);
 
     const response2 = await fetch("http://200.201.193.100/seekloc/ws.php", {
       method: "POST",
@@ -1425,12 +1434,28 @@ serve(async (req) => {
         if (cnpjMatch) {
           cnpj = cnpjMatch[0];
           console.log(`[Email Flow] Pivot found CNPJ: ${cnpj}`);
-        } else {
-          // Se não achou CNPJ, seta como nome pra busca de pessoa posterior
+          // Se não achou CNPJ, seta como nome pra busca de pessoa posterior e tenta Seekloc
           empresaNome = localPart;
+          
+          // TENTATIVA SEEKLOC POR E-MAIL/NOME (Já que não achou CNPJ)
+          console.log(`[Email Flow] Trying Seekloc by email: ${emailInput}`);
+          const seeklocByEmail = await fetchSeeklocData({ email: emailInput });
+          if (seeklocByEmail?.pessoa?.id) {
+            seeklocDataDirect = seeklocByEmail; 
+            console.log(`[Email Flow] Seekloc found data directly by email!`);
+          } else {
+            console.log(`[Email Flow] Seekloc by email failed, trying by name: ${localPart}`);
+            const seeklocByName = await fetchSeeklocData({ nome: localPart });
+            if (seeklocByName?.pessoa?.id) {
+              seeklocDataDirect = seeklocByName;
+              console.log(`[Email Flow] Seekloc found data by name!`);
+            }
+          }
         }
       }
     }
+    
+    let seeklocDataRef = seeklocDataDirect;
 
     if (cnpj) {
       console.log(`Fetching CNPJ data for: ${cnpj}`);
@@ -1577,7 +1602,7 @@ serve(async (req) => {
         firecrawlSearch(`"${personNomeDerivado}" site:linkedin.com/in`, "person_linkedin", { limit: isFastMode ? 2 : 3 }),
         !isFastMode ? firecrawlSearch(`"${personNomeDerivado}" site:instagram.com`, "person_instagram", { limit: 2 }) : Promise.resolve(null),
       ]) : Promise.resolve(null),
-      cnpj ? fetchSeeklocData(cnpj) : Promise.resolve(null),
+      seeklocDataRef ? Promise.resolve(seeklocDataRef) : (cnpj ? fetchSeeklocData({ documento: cnpj }) : (personEmail ? fetchSeeklocData({ email: personEmail }) : Promise.resolve(null))),
       cnpjDataRef?.codigo_municipio_ibge ? fetchIbgeData(cnpjDataRef.codigo_municipio_ibge as string) : Promise.resolve(null)
     ]);
 
