@@ -852,32 +852,7 @@ async function fetchExternalSources(
   return results;
 }
 
-function extractSocialLinksFromMarkdown(markdown: string): string[] {
-  if (!markdown) return [];
-  const socialPatterns = [
-    /https?:\/\/(?:www\.)?facebook\.com\/[a-zA-Z0-9._-]+/gi,
-    /https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9._-]+/gi,
-    /https?:\/\/(?:www\.)?linkedin\.com\/(?:company|in)\/[a-zA-Z0-9._-]+/gi,
-    /https?:\/\/(?:www\.)?youtube\.com\/(?:user|channel|c)\/[a-zA-Z0-9._-]+/gi,
-    /https?:\/\/(?:www\.)?twitter\.com\/[a-zA-Z0-9._-]+/gi,
-    /https?:\/\/(?:www\.)?x\.com\/[a-zA-Z0-9._-]+/gi,
-  ];
-
-  const links = new Set<string>();
-  for (const pattern of socialPatterns) {
-    const matches = markdown.match(pattern);
-    if (matches) {
-      matches.forEach(link => {
-        // Basic cleanup
-        const clean = link.replace(/[.,;]$/, "").split(/[?#]/)[0];
-        if (!clean.match(/login|share|privacy|terms|policies/i)) {
-          links.add(clean);
-        }
-      });
-    }
-  }
-  return [...links];
-}
+// (extractSocialLinksFromMarkdown definida acima — duplicata removida)
 
 function formatExternalContext(results: FirecrawlResult[]): string {
   if (results.length === 0) return "";
