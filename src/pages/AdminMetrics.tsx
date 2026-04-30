@@ -102,6 +102,7 @@ export default function AdminMetrics() {
           </CardContent>
         </Card>
       </div>
+      </div>
     </div>
   );
 }
