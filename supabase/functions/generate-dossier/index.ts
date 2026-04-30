@@ -1289,6 +1289,35 @@ function calculateLeadScore(
   return { total, max, percentual, classificacao, cor, breakdown };
 }
 
+function parseAiGatewayError(payload: unknown, fallbackStatus?: number): { status: number; message: string } | null {
+  const data = typeof payload === "string" ? (() => {
+    try { return JSON.parse(payload); } catch { return null; }
+  })() : payload as Record<string, any> | null;
+
+  const rawError = data?.error;
+  if (!rawError) return null;
+
+  const rawCode = rawError.code ?? rawError.status ?? fallbackStatus;
+  const codeText = String(rawCode ?? "").toLowerCase();
+  const status = Number(rawCode) || fallbackStatus || 500;
+  const rawMessage = String(rawError.message ?? "Erro ao consultar a IA");
+
+  if (status === 429 || codeText.includes("429") || codeText.includes("rate")) {
+    return { status: 429, message: "Limite de requisições da IA excedido. Aguarde alguns instantes e tente novamente." };
+  }
+  if (status === 402 || codeText.includes("402") || codeText.includes("credit") || codeText.includes("quota")) {
+    return { status: 402, message: "Créditos de IA insuficientes. Adicione créditos em Settings > Workspace > Usage." };
+  }
+  return { status, message: `Erro da IA: ${rawMessage}` };
+}
+
+function aiFailureResponse(message: string, status: number) {
+  return new Response(
+    JSON.stringify({ success: false, error: message, upstream_status: status }),
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
 // ==================== MAIN HANDLER ====================
 
 serve(async (req) => {
