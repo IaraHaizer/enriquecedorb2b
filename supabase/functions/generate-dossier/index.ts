@@ -1369,6 +1369,22 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let userId: string | null = null;
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      const sbClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: { user } } = await sbClient.auth.getUser();
+      if (user) userId = user.id;
+    }
+  } catch (err) {
+    console.warn("Failed to extract userId from auth header", err);
+  }
+
   try {
     const rawBody = await req.text();
     let parsedBody: Record<string, unknown>;
@@ -1785,6 +1801,7 @@ LEMBRETE OBRIGATÓRIO:
 Analise profundamente e retorne o JSON estruturado conforme o formato especificado.`;
 
     let dossier;
+    let aiDataTracker: any = null;
 
     if (isFastMode) {
       console.log("[Fast Mode] Skipping AI inference, generating static dossier.");
@@ -1918,6 +1935,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       let aiData;
       try {
         aiData = JSON.parse(aiText);
+        aiDataTracker = aiData;
       } catch {
         console.error("Failed to parse AI response:", aiText?.slice(0, 500));
         return new Response(
@@ -2005,6 +2023,74 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
         },
       ],
     };
+
+    if (userId) {
+      const logs = [];
+
+      if (!isFastMode && aiDataTracker?.usage) {
+        const usage = aiDataTracker.usage;
+        const promptTokens = usage.prompt_tokens || 0;
+        const completionTokens = usage.completion_tokens || 0;
+        const totalTokens = usage.total_tokens || 0;
+        const costUsd = (promptTokens / 1_000_000) * 0.075 + (completionTokens / 1_000_000) * 0.30;
+        logs.push({
+          user_id: userId,
+          api_name: "gemini",
+          credits_used: totalTokens,
+          cost_usd: costUsd,
+          details: { prompt: promptTokens, completion: completionTokens, model: "gemini-2.5-flash" }
+        });
+      }
+
+      if (externalResults && externalResults.length > 0) {
+        logs.push({
+          user_id: userId,
+          api_name: "firecrawl",
+          credits_used: externalResults.length,
+          cost_usd: externalResults.length * 0.001,
+          details: { count: externalResults.length }
+        });
+      }
+
+      if (seeklocData) {
+        logs.push({
+          user_id: userId,
+          api_name: "seekloc",
+          credits_used: 2, 
+          cost_usd: 0.05, 
+          details: { calls: 2 }
+        });
+      }
+
+      if (googlePlacesData) {
+        logs.push({
+          user_id: userId,
+          api_name: "google_places",
+          credits_used: 1,
+          cost_usd: 0.017, 
+          details: { calls: 1 }
+        });
+      }
+
+      if (cnpjDataFound) {
+        logs.push({
+          user_id: userId,
+          api_name: "brasilapi",
+          credits_used: 1,
+          cost_usd: 0,
+          details: { calls: 1 }
+        });
+      }
+
+      if (logs.length > 0) {
+        try {
+          const sb = getSupabaseAdmin();
+          await sb.from("api_usage_logs").insert(logs);
+        } catch (err) {
+          console.error("[Usage Tracking] Error inserting logs:", err);
+        }
+      }
+    }
 
     return new Response(
       JSON.stringify({ success: true, dossier, data_sources, lead_score }),

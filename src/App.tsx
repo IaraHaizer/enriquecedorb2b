@@ -9,6 +9,8 @@ import LeadRanking from "./pages/LeadRanking.tsx";
 import Historico from "./pages/Historico.tsx";
 import BulkProcess from "./pages/BulkProcess.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import AdminMetrics from "./pages/AdminMetrics.tsx";
+import AdminUsers from "./pages/AdminUsers.tsx";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +26,23 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) return <Navigate to="/auth" replace />;
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { session, role, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="dark min-h-screen bg-background flex items-center justify-center">
+        <div className="h-10 w-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!session) return <Navigate to="/auth" replace />;
+  if (role !== 'admin') return <Navigate to="/" replace />;
+  
   return <>{children}</>;
 }
 
@@ -45,6 +64,8 @@ const App = () => (
           <Route path="/ranking" element={<ProtectedRoute><LeadRanking /></ProtectedRoute>} />
           <Route path="/historico" element={<ProtectedRoute><Historico /></ProtectedRoute>} />
           <Route path="/massa" element={<ProtectedRoute><BulkProcess /></ProtectedRoute>} />
+          <Route path="/admin/metrics" element={<AdminRoute><AdminMetrics /></AdminRoute>} />
+          <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

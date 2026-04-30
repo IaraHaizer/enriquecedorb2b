@@ -8,6 +8,7 @@ import { generateDossier, type Dossier, type DataSources, type LeadScore, type I
 import { Radar, RotateCcw, LogOut, RefreshCw, Search, BarChart3, History, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppNavLink } from "@/components/AppNavLink";
+import { AppHeader } from "@/components/AppHeader";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Index() {
@@ -66,38 +67,18 @@ export default function Index() {
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
-      <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Radar className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-lg font-heading font-bold tracking-tight">Group Radar</h1>
-              <p className="text-xs text-muted-foreground">Inteligência Estratégica · Group Software</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <AppNavLink to="/" icon={Search} label="Pesquisa" active />
-            <AppNavLink to="/ranking" icon={BarChart3} label="Ranking" />
-            <AppNavLink to="/historico" icon={History} label="Histórico" />
-            <AppNavLink to="/massa" icon={Layers} label="Massa" />
-            {dossier && !isLoading && (
-              <>
-                <Button variant="ghost" size="sm" onClick={handleForceRefresh} className="text-muted-foreground" disabled={!lastInput}>
-                  <RefreshCw className="h-4 w-4 mr-1" /> Atualizar Dados
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleNewSearch} className="text-muted-foreground">
-                  <RotateCcw className="h-4 w-4 mr-1" /> Nova Pesquisa
-                </Button>
-              </>
-            )}
-            <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground">
-              <LogOut className="h-4 w-4 mr-1" /> Sair
+      <AppHeader>
+        {dossier && !isLoading && (
+          <>
+            <Button variant="ghost" size="sm" onClick={handleForceRefresh} className="text-muted-foreground" disabled={!lastInput}>
+              <RefreshCw className="h-4 w-4 mr-1" /> Atualizar Dados
             </Button>
-          </div>
-        </div>
-      </header>
+            <Button variant="ghost" size="sm" onClick={handleNewSearch} className="text-muted-foreground">
+              <RotateCcw className="h-4 w-4 mr-1" /> Nova Pesquisa
+            </Button>
+          </>
+        )}
+      </AppHeader>
 
       <main className="container max-w-4xl mx-auto px-4 py-12">
         {!dossier && !isLoading && (
