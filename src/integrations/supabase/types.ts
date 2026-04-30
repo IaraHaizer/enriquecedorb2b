@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_usage_logs: {
+        Row: {
+          api_name: Database["public"]["Enums"]["api_source_name"]
+          cost_usd: number
+          created_at: string
+          credits_used: number
+          details: Json | null
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          api_name: Database["public"]["Enums"]["api_source_name"]
+          cost_usd?: number
+          created_at?: string
+          credits_used?: number
+          details?: Json | null
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          api_name?: Database["public"]["Enums"]["api_source_name"]
+          cost_usd?: number
+          created_at?: string
+          credits_used?: number
+          details?: Json | null
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       dossier_history: {
         Row: {
           created_at: string
@@ -77,15 +107,60 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      vw_api_usage_stats: {
+        Row: {
+          api_name: Database["public"]["Enums"]["api_source_name"] | null
+          month: string | null
+          total_calls: number | null
+          total_cost_usd: number | null
+          total_credits: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["user_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      api_source_name:
+        | "gemini"
+        | "firecrawl"
+        | "seekloc"
+        | "google_places"
+        | "brasilapi"
+      user_role: "admin" | "comercial"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -212,6 +287,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      api_source_name: [
+        "gemini",
+        "firecrawl",
+        "seekloc",
+        "google_places",
+        "brasilapi",
+      ],
+      user_role: ["admin", "comercial"],
+    },
   },
 } as const
