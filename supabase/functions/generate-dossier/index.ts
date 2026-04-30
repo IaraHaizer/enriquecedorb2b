@@ -1817,6 +1817,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userMessage },
           ],
+          max_tokens: 8192,
         }),
       });
 
@@ -1853,10 +1854,18 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
         );
       }
       const content = aiData.choices?.[0]?.message?.content;
+      const finishReason = aiData.choices?.[0]?.finish_reason;
+      console.log("[AI] finish_reason:", finishReason, "content length:", content?.length ?? 0);
 
       if (!content) {
+        console.error("[AI] Empty content. Full response:", JSON.stringify(aiData).slice(0, 2000));
+        const isLength = finishReason === "length" || finishReason === "MAX_TOKENS";
         return new Response(
-          JSON.stringify({ error: "Resposta vazia da IA" }),
+          JSON.stringify({
+            error: isLength
+              ? "Resposta da IA truncada (limite de tokens). Tente reduzir o escopo ou troque para gemini-2.5-pro."
+              : `Resposta vazia da IA${finishReason ? ` (motivo: ${finishReason})` : ""}`,
+          }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
