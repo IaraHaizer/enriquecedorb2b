@@ -602,7 +602,7 @@ async function fetchSeeklocData(params: { documento?: string; email?: string; no
     form1.append("usr", user);
     form1.append("pwd", pwd);
     form1.append("emp", emp);
-    form1.append("tp", "1"); 
+    form1.append("tp", "14"); 
 
     if (params.documento) {
       form1.append("doc", params.documento.replace(/[^\d]/g, ""));
