@@ -1,0 +1,375 @@
+{
+  "success": true,
+  "dossier": {
+    "empresa": {
+      "nome": "GF - GESTAO FINANCEIRA LTDA",
+      "cnpj": "24473793000124",
+      "situacao": "ATIVA",
+      "abertura": "2016-03-29 (8 anos)",
+      "porte": "EMPRESA DE PEQUENO PORTE",
+      "capital_social": "R$ 120.000",
+      "endereco": "CHILE 000005, CENTRO HISTORICO - SALVADOR/BA - CEP 40026032",
+      "telefone": "7134166000",
+      "redes_sociais": "Instagram: @gruposolucaoecia; Facebook: Grupo Solução & Cia; YouTube: @GrupoSolucaoCia",
+      "reputacao": "Reputação Não recomendada no Reclame Aqui. Há reclamações de 'Cobrança indevida de taxa condominial após venda do imóvel e solicitação de exclusão do cadastro'.",
+      "atividade_principal": "Atividades de consultoria em gestão empresarial, exceto consultoria técnica específica",
+      "tecnologia_atual": "Não identificado (mencionam 'tecnologia na gestão condominial' mas sem identificar softwares específicos)",
+      "grupos_economicos": {
+        "identificado": true,
+        "detalhes": "Identificadas outras empresas com o nome fantasia 'Grupo Solução & Cia', como 'SOLUCAO GESTAO SUPORTE DE LOCACAO S.A.' (CNPJ 00.821.796/0001-43, Camaçari/BA, Gestão e administração da propriedade imobiliária) e 'Nova Solucao Gestao e Servicos Ltda' (CNPJ 17.714.934/0001-98, Ilhéus/BA, Serviços combinados de escritório e apoio administrativo). Há indícios de um grupo de empresas com atuação em gestão e serviços."
+      },
+      "status_integridade": {
+        "nivel": "Suficiente",
+        "motivo": "Dados oficiais da Receita Federal completos, enriquecidos com diversas fontes externas.",
+        "is_provisorio": false
+      }
+    },
+    "socio_principal": {
+      "nome": "JESSICA DAMASCENO MENEZES",
+      "cargo": "Sócio-Administrador",
+      "formacao_academica": "Não identificado",
+      "historico_profissional": "Não identificado",
+      "linkedin": "Não identificado",
+      "background_provavel": "Empresária com experiência em gestão e consultoria, ligada ao setor de serviços e possivelmente ao de administração condominial e imobiliária devido às atividades do grupo.",
+      "is_pep": false,
+      "pep_detalhes": "Não identificado"
+    },
+    "mapeamento_socios": [
+      {
+        "nome": "JESSICA DAMASCENO MENEZES",
+        "cargo": "Sócio-Administrador",
+        "background_provavel": "Empresária com experiência em gestão e consultoria, ligada ao setor de serviços e possivelmente ao de administração condominial e imobiliária devido às atividades do grupo.",
+        "is_pep": false,
+        "pep_detalhes": "Não identificado"
+      }
+    ],
+    "fontes_externas": {
+      "reclame_aqui": {
+        "encontrado": true,
+        "resumo": "Reputação 'Não Recomendada' com reclamações sobre cobrança indevida de taxa condominial.",
+        "url": "https://www.reclameaqui.com.br/empresa/grupo-solucao-e-cia/"
+      },
+      "processos_judiciais": {
+        "encontrado": true,
+        "resumo": "Processos encontrados no Jusbrasil envolvendo 'Grupo Solucao & Cia' e 'Jessica Damasceno Menezes'. Um exemplo é 'Eduardo Veloso Leahy x Grupo Solucao CIA' no TJBA.",
+        "url": "https://www.jusbrasil.com.br/consulta-processual/busca?q=grupo+solucao+cia"
+      },
+      "linkedin": {
+        "encontrado": false,
+        "resumo": "Não identificado",
+        "url": "Não identificado"
+      },
+      "instagram": {
+        "encontrado": true,
+        "resumo": "Perfil ativo (Grupo Solução & Cia e Grupo Solução Cia Administração Condominial).",
+        "url": "https://www.instagram.com/gruposolucaoecia/"
+      },
+      "facebook": {
+        "encontrado": true,
+        "resumo": "Página da empresa (Adiserv Grupo Solução & Cia) e menções de atuação.",
+        "url": "https://www.facebook.com/AdiservSolucaoCia/"
+      },
+      "youtube": {
+        "encontrado": true,
+        "resumo": "Canal 'Grupo Solução & Cia' no YouTube, porém com erro de acesso (403 Forbidden).",
+        "url": "https://www.youtube.com/@GrupoSolucaoCia"
+      },
+      "twitter": {
+        "encontrado": false,
+        "resumo": "Não identificado",
+        "url": "Não identificado"
+      },
+      "noticias": {
+        "encontrado": true,
+        "resumo": "Citações em portais como 'Condomínio em Foco' e 'Anuário Empresarial' abordando a atuação da empresa na gestão condominial da Bahia e sua inovação, sustentabilidade e tecnologia.",
+        "urls": [
+          "https://condominioemfoco.com.br/grupo-solucao-cia-transformando-a-gestao-condominial-na-bahia/",
+          "https://anuarioempresarial.com.br/grupo-solucao-cia-inovacao-sustentabilidade-e-tecnologia-na-gestao-condominial/"
+        ]
+      }
+    },
+    "risco_financeiro": {
+      "protestos": {
+        "encontrado": false,
+        "resumo": "Não identificado",
+        "quantidade_estimada": 0
+      },
+      "negativacoes": {
+        "encontrado": false,
+        "resumo": "Não identificado",
+        "nivel_do_serasa": "Não identificado"
+      },
+      "regularidade_fiscal": "Não identificado",
+      "nivel_risco": "Baixo"
+    },
+    "contatos_abordagem": [
+      {
+        "nome": "Não identificado",
+        "cargo": "Não identificado",
+        "canal": "Telefone",
+        "contato": "7134166000",
+        "fonte": "Receita Federal"
+      }
+    ],
+    "sinais_crescimento": [
+      {
+        "tipo": "positivo",
+        "descricao": "Vagas abertas anunciadas em Threads (Grupo Solução & Cia abre Vagas em Salvador), indicando busca por expansão ou reforço de equipe."
+      },
+      {
+        "tipo": "positivo",
+        "descricao": "Múltiplos CNPJs/empresas sob o guarda-chuva 'Grupo Solução & Cia' em diferentes cidades da Bahia (Salvador, Camaçari, Ilhéus) e com atividades complementares (consultoria, administração imobiliária, serviços administrativos), sugerindo um grupo econômico em crescimento e diversificação."
+      },
+      {
+        "tipo": "positivo",
+        "descricao": "Mídia positiva em portais do setor (Condomínio em Foco, Anuário Empresarial) destacando a inovação e tecnologia da empresa na gestão condominial, indicando um foco em modernização e crescimento no segmento."
+      }
+    ],
+    "insights_estrategicos": {
+      "janela_oportunidade": "A empresa tem histórico de 8 anos e atua com consultoria e serviços de apoio administrativo, além de ter um grupo econômico com atuação em administração imobiliária e condominial. Sua busca por 'inovação, sustentabilidade e tecnologia' em gestão condominial, aliada às vagas abertas, indica uma janela de oportunidade para automação e melhoria de processos, especialmente na administração de condomínios/imóveis. A reputação negativa no Reclame Aqui por cobrança pode ser um ponto de entrada para oferecer soluções de gestão de inadimplência.",
+      "abordagem_personalizada": {
+        "canal_ideal": "Telefone/Email, seguido de contato via representantes em associações locais do setor.",
+        "tom_de_voz": "Consultivo e de apoio, focando em soluções para otimizar a gestão, reduzir a inadimplência e melhorar a satisfação do cliente, baseando-se nas dores identificadas (reclamações de cobrança).",
+        "argumento_central": "Como a Group Software e PartnerBank podem modernizar e automatizar a gestão de condomínios e imobiliárias, melhorando a eficiência operacional, a comunicação com condôminos e a gestão financeira, transformando dores como a inadimplência em oportunidades de crescimento e garantindo 100% da arrecadação."
+      },
+      "ressonancia_por_perfil": [
+        {
+          "socio": "JESSICA DAMASCENO MENEZES",
+          "ponto_de_dor": "Necessidade de otimizar a gestão financeira e processos do grupo, dada a expansão e a menção de 'tecnologia na gestão condominial'. As reclamações no Reclame Aqui indicam uma oportunidade para profissionalizar a gestão da cobrança e a experiência do cliente."
+        }
+      ],
+      "o_que_evitar": "Abordagem excessivamente agressiva ou que não demonstre conhecimento das dores específicas da gestão de cobrança do Grupo Solução & Cia. Não focar apenas na empresa principal (GF - Gestão Financeira), mas no grupo econômico e suas diversas frentes de atuação.",
+      "contexto_regional": "Salvador/BA, com uma população de 2.417.678 habitantes, é uma capital e o maior mercado da Bahia. O PIB municipal expressivo de R$ 76.698.777 mil indica um ambiente econômico ativo. A região possui uma demanda significativa por serviços de administração condominial e imobiliária. A Group Software tem grande autoridade no mercado nordestino e brasileiro. A presença da empresa em Salvador, Camaçari e Ilhéus indica uma atuação forte na Bahia, onde a Group pode reforçar sua liderança. Concorrentes regionais podem estar presentes, mas a Group Software pode se posicionar como o 'Único ERP completo para gestão de propriedades' com 'maior número de recursos e automações do mercado'. Abordagens podem se beneficiar da menção a associações como SECOVI-BA ou ABADI caso a empresa seja filiada, explorando a cultura de negócios local e a necessidade de sistemas robustos em grandes centros urbanos. A sazonalidade do mercado imobiliário pode influenciar picos de demanda por seus serviços.",
+      "ibge_data": {
+        "populacao": "2417678",
+        "populacao_ano": "2022",
+        "pib": "76698777",
+        "pib_ano": "2023"
+      }
+    },
+    "logica_group_software": {
+      "analise_fit": "O Grupo Solução & Cia, com sua atuação em consultoria e suporte administrativo e as outras empresas do grupo focadas em administração imobiliária e condominial, demonstra uma clara necessidade de sistemas robustos para gestão. A busca por 'inovação, sustentabilidade e tecnologia' na gestão condominial, juntamente com a reputação 'Não Recomendada' no Reclame Aqui por problemas de cobrança, aponta para dores que o Group Condomínios e o PartnerBank solucionam. O Group Condomínios oferece ferramentas de gestão eficiente de inadimplência, atendimento online e pasta de prestação de contas em um clique, que modernizariam a operação. Já o PartnerBank, com Automação de Boletos e Condomínio Garantido, resolve diretamente a dor da inadimplência, garantindo 100% da arrecadação e melhorando o fluxo de caixa, além de oferecer parcelamento de boletos no cartão para condôminos inadimplentes. O Group Financeiro complementaria com dashboards e conciliação bancária.",
+      "modulos_sugeridos": [
+        "Group Condomínios",
+        "Automação de Boletos PartnerBank",
+        "Condomínio Garantido PartnerBank",
+        "Controle de Inadimplência PartnerBank",
+        "Group Financeiro"
+      ],
+      "gancho_venda": "Transforme a gestão do seu condomínio com o Group Condomínios e garanta 100% da sua arrecadação com o Condomínio Garantido PartnerBank, independente de clientes inadimplentes. Reduza a inadimplência e melhore a experiência do seu condômino!",
+      "recomendacao_principal": "Recomenda-se uma abordagem focada na otimização da gestão condominial e na resolução da inadimplência, utilizando o Group Condomínios para gestão completa e as soluções PartnerBank para garantir a arrecadação e melhorar o fluxo de caixa.",
+      "produtos_sugeridos": [
+        "Group Condomínios",
+        "Automação de Boletos PartnerBank",
+        "Condomínio Garantido PartnerBank",
+        "Controle de Inadimplência PartnerBank",
+        "Group Financeiro"
+      ],
+      "justificativa": "A empresa atua no segmento de consultoria e gestão, com indícios de forte presença em administração condominial através de empresas relacionadas. O histórico de reclamações sobre cobrança indevida no Reclame Aqui revela uma dor latente na gestão financeira e de relacionamento com o condômino. O Group Condomínios, com sua 'Gestão eficiente de inadimplência e cobrança', 'Super App para comunicação com condôminos' e 'Pasta de Prestação de Contas em um clique', é ideal para modernizar a operação e melhorar a reputação. O PartnerBank, com o 'Condomínio Garantido' (100% da arrecadação mensal garantida) e o 'Controle de Inadimplência' (parcelamento no cartão), atua diretamente na dor identificada, oferecendo soluções financeiras imediatas e de longo prazo. O Group Financeiro complementa, oferecendo controle e transparência essenciais para a gestão do grupo."
+    },
+    "dominios_associados": [
+      {
+        "dominio": "empresas.serasaexperian.com.br",
+        "status": "active",
+        "cnpj_registrante": "17.274.718/0001-79"
+      }
+    ]
+  },
+  "data_sources": {
+    "receita_federal": true,
+    "campos_receita": [
+      "nome",
+      "cnpj",
+      "situacao",
+      "abertura",
+      "porte",
+      "capital_social",
+      "endereco",
+      "telefone",
+      "atividade_principal",
+      "mapeamento_socios"
+    ],
+    "campos_ia": [
+      "redes_sociais",
+      "formacao_academica",
+      "historico_profissional",
+      "linkedin",
+      "background_provavel",
+      "insights_estrategicos",
+      "logica_group_software",
+      "risco_financeiro",
+      "contatos_abordagem",
+      "sinais_crescimento",
+      "tecnologia_atual"
+    ],
+    "fontes_externas": [
+      "reclame_aqui",
+      "jusbrasil_escavador",
+      "instagram",
+      "facebook",
+      "youtube",
+      "google_news",
+      "protestos_negativacoes",
+      "vagas_crescimento",
+      "tech_stack",
+      "localizacao_contatos",
+      "dominios_whois",
+      "seekloc"
+    ],
+    "firecrawl_details": [
+      {
+        "source": "reclame_aqui",
+        "found": true,
+        "count": 3,
+        "error": null
+      },
+      {
+        "source": "jusbrasil_escavador",
+        "found": true,
+        "count": 3,
+        "error": null
+      },
+      {
+        "source": "linkedin",
+        "found": false,
+        "count": 0,
+        "error": null
+      },
+      {
+        "source": "instagram",
+        "found": true,
+        "count": 3,
+        "error": null
+      },
+      {
+        "source": "facebook",
+        "found": true,
+        "count": 3,
+        "error": null
+      },
+      {
+        "source": "youtube",
+        "found": true,
+        "count": 2,
+        "error": null
+      },
+      {
+        "source": "twitter_x",
+        "found": false,
+        "count": 0,
+        "error": null
+      },
+      {
+        "source": "google_news",
+        "found": true,
+        "count": 1,
+        "error": null
+      },
+      {
+        "source": "protestos_negativacoes",
+        "found": true,
+        "count": 2,
+        "error": null
+      },
+      {
+        "source": "vagas_crescimento",
+        "found": true,
+        "count": 1,
+        "error": null
+      },
+      {
+        "source": "tech_stack",
+        "found": true,
+        "count": 2,
+        "error": null
+      },
+      {
+        "source": "localizacao_contatos",
+        "found": true,
+        "count": 3,
+        "error": null
+      },
+      {
+        "source": "grupo_economico",
+        "found": false,
+        "count": 0,
+        "error": null
+      },
+      {
+        "source": "dominios_whois",
+        "found": true,
+        "count": 1,
+        "error": null
+      }
+    ]
+  },
+  "lead_score": {
+    "total": 93,
+    "max": 130,
+    "percentual": 72,
+    "classificacao": "Quente",
+    "cor": "#f59e0b",
+    "breakdown": [
+      {
+        "categoria": "Dados Cadastrais",
+        "pontos": 20,
+        "max": 20,
+        "detalhe": "CNPJ verificado na Receita Federal"
+      },
+      {
+        "categoria": "Maturidade",
+        "pontos": 15,
+        "max": 15,
+        "detalhe": "8 anos, Capital: R$ 120.000 + Bônus Regional"
+      },
+      {
+        "categoria": "Estrutura Societária",
+        "pontos": 4,
+        "max": 10,
+        "detalhe": "1 sócio(s) mapeado(s)"
+      },
+      {
+        "categoria": "Presença Digital",
+        "pontos": 6,
+        "max": 15,
+        "detalhe": "1 domínio(s): empresas.serasaexperian.com.br"
+      },
+      {
+        "categoria": "Reputação / Riscos",
+        "pontos": 9,
+        "max": 15,
+        "detalhe": "Processos judiciais encontrados"
+      },
+      {
+        "categoria": "Cobertura de Dados",
+        "pontos": 9,
+        "max": 15,
+        "detalhe": "10/7 fontes externas com dados"
+      },
+      {
+        "categoria": "Saúde Financeira",
+        "pontos": 10,
+        "max": 10,
+        "detalhe": "Nível: Baixo — sem alertas financeiros"
+      },
+      {
+        "categoria": "Fit Tecnológico",
+        "pontos": 10,
+        "max": 10,
+        "detalhe": "Usa: Não identificado (mencionam 'tecnologia na gestão condominial' mas sem identificar softwares específicos)"
+      },
+      {
+        "categoria": "Sinais de Crescimento",
+        "pontos": 10,
+        "max": 10,
+        "detalhe": "3 sinal(is) positivo(s)"
+      },
+      {
+        "categoria": "Validação Cruzada",
+        "pontos": 0,
+        "max": 10,
+        "detalhe": "Nenhuma validação extra"
+      }
+    ]
+  }
+}
