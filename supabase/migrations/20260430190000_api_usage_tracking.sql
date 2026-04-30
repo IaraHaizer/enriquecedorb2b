@@ -43,15 +43,18 @@ CREATE POLICY "Admins can update roles"
 -- Trigger to automatically create a user_role entry when a new user signs up
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  assigned_role user_role;
 BEGIN
+  IF NEW.email = 'iara.oliveira@partnerbank.com.br' THEN
+    assigned_role := 'admin'::user_role;
+  ELSE
+    assigned_role := 'comercial'::user_role;
+  END IF;
+
   INSERT INTO public.user_roles (id, email, role)
-  VALUES (
-    NEW.id, 
-    NEW.email, 
-    -- Se for o primeiro usuário do sistema, ou tiver e-mail específico, você pode alterar aqui. 
-    -- Por padrão, todos começam como comercial.
-    'comercial'::user_role
-  );
+  VALUES (NEW.id, NEW.email, assigned_role);
+  
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -97,7 +100,7 @@ CREATE POLICY "Admins can read all usage"
         )
     );
 
--- Allow inserting usage from edge functions (Edge functions use service_role which bypasses RLS, but we can allow authenticated users to insert their own logs if needed. For safety, we keep it restricted).
+-- Allow inserting usage from edge functions
 CREATE POLICY "Users can insert their own usage"
     ON public.api_usage_logs
     FOR INSERT
@@ -113,3 +116,12 @@ SELECT
     SUM(cost_usd) as total_cost_usd
 FROM public.api_usage_logs
 GROUP BY 1, 2;
+
+-- Populate user_roles for any already existing users in the system
+INSERT INTO public.user_roles (id, email, role)
+SELECT 
+  id, 
+  email, 
+  CASE WHEN email = 'iara.oliveira@partnerbank.com.br' THEN 'admin'::user_role ELSE 'comercial'::user_role END
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
