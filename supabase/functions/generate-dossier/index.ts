@@ -539,9 +539,9 @@ async function fetchApolloEnrichment(_options: {
   return null;
 }
 
-async function fetchIbgeData(codigoIbge: string): Promise<Record<string, unknown> | null> {
-  if (!codigoIbge) return null;
-  const cleanCode = codigoIbge.replace(/\D/g, "");
+async function fetchIbgeData(codigoIbge: string | number | null | undefined): Promise<Record<string, unknown> | null> {
+  if (codigoIbge === null || codigoIbge === undefined || codigoIbge === "") return null;
+  const cleanCode = String(codigoIbge).replace(/\D/g, "");
   if (cleanCode.length < 6) return null;
   
   try {
