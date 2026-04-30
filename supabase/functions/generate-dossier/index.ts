@@ -1851,24 +1851,10 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       });
 
       if (!response.ok) {
-        if (response.status === 429) {
-          return new Response(
-            JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns instantes." }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        if (response.status === 402) {
-          return new Response(
-            JSON.stringify({ error: "Créditos insuficientes. Adicione fundos em Settings > Workspace > Usage." }),
-            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
         const errorText = await response.text();
+        const gatewayError = parseAiGatewayError(errorText, response.status);
         console.error("AI gateway error:", response.status, errorText);
-        return new Response(
-          JSON.stringify({ error: "Erro ao gerar dossiê" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return aiFailureResponse(gatewayError?.message || "Erro ao gerar dossiê", gatewayError?.status || response.status);
       }
 
       const aiText = await response.text();
@@ -1881,6 +1867,11 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           JSON.stringify({ error: "Erro ao processar resposta da IA (parsing)" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+      const embeddedGatewayError = parseAiGatewayError(aiData, response.status);
+      if (embeddedGatewayError) {
+        console.error("[AI] Gateway returned error payload:", JSON.stringify(aiData).slice(0, 2000));
+        return aiFailureResponse(embeddedGatewayError.message, embeddedGatewayError.status);
       }
       const content = aiData.choices?.[0]?.message?.content;
       const finishReason = aiData.choices?.[0]?.finish_reason;
