@@ -1289,6 +1289,35 @@ function calculateLeadScore(
   return { total, max, percentual, classificacao, cor, breakdown };
 }
 
+function parseAiGatewayError(payload: unknown, fallbackStatus?: number): { status: number; message: string } | null {
+  const data = typeof payload === "string" ? (() => {
+    try { return JSON.parse(payload); } catch { return null; }
+  })() : payload as Record<string, any> | null;
+
+  const rawError = data?.error;
+  if (!rawError) return null;
+
+  const rawCode = rawError.code ?? rawError.status ?? fallbackStatus;
+  const codeText = String(rawCode ?? "").toLowerCase();
+  const status = Number(rawCode) || fallbackStatus || 500;
+  const rawMessage = String(rawError.message ?? "Erro ao consultar a IA");
+
+  if (status === 429 || codeText.includes("429") || codeText.includes("rate")) {
+    return { status: 429, message: "Limite de requisições da IA excedido. Aguarde alguns instantes e tente novamente." };
+  }
+  if (status === 402 || codeText.includes("402") || codeText.includes("credit") || codeText.includes("quota")) {
+    return { status: 402, message: "Créditos de IA insuficientes. Adicione créditos em Settings > Workspace > Usage." };
+  }
+  return { status, message: `Erro da IA: ${rawMessage}` };
+}
+
+function aiFailureResponse(message: string, status: number) {
+  return new Response(
+    JSON.stringify({ success: false, error: message, upstream_status: status }),
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
 // ==================== MAIN HANDLER ====================
 
 serve(async (req) => {
@@ -1822,24 +1851,10 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       });
 
       if (!response.ok) {
-        if (response.status === 429) {
-          return new Response(
-            JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns instantes." }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        if (response.status === 402) {
-          return new Response(
-            JSON.stringify({ error: "Créditos insuficientes. Adicione fundos em Settings > Workspace > Usage." }),
-            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
         const errorText = await response.text();
+        const gatewayError = parseAiGatewayError(errorText, response.status);
         console.error("AI gateway error:", response.status, errorText);
-        return new Response(
-          JSON.stringify({ error: "Erro ao gerar dossiê" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return aiFailureResponse(gatewayError?.message || "Erro ao gerar dossiê", gatewayError?.status || response.status);
       }
 
       const aiText = await response.text();
@@ -1853,6 +1868,11 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      const embeddedGatewayError = parseAiGatewayError(aiData, response.status);
+      if (embeddedGatewayError) {
+        console.error("[AI] Gateway returned error payload:", JSON.stringify(aiData).slice(0, 2000));
+        return aiFailureResponse(embeddedGatewayError.message, embeddedGatewayError.status);
+      }
       const content = aiData.choices?.[0]?.message?.content;
       const finishReason = aiData.choices?.[0]?.finish_reason;
       console.log("[AI] finish_reason:", finishReason, "content length:", content?.length ?? 0);
@@ -1862,11 +1882,12 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
         const isLength = finishReason === "length" || finishReason === "MAX_TOKENS";
         return new Response(
           JSON.stringify({
+            success: false,
             error: isLength
               ? "Resposta da IA truncada (limite de tokens). Tente reduzir o escopo ou troque para gemini-2.5-pro."
               : `Resposta vazia da IA${finishReason ? ` (motivo: ${finishReason})` : ""}`,
           }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
