@@ -26,7 +26,7 @@ interface DossierDisplayProps {
   forceShowTechnical?: boolean;
 }
 
-function SourceBadge({ source }: { source: "receita" | "ia" | "firecrawl" | "reclame_aqui" | "jusbrasil" | "linkedin" | "instagram" | "facebook" | "youtube" | "twitter" | "noticias" }) {
+function SourceBadge({ source }: { source: "receita" | "ia" | "firecrawl" | "reclame_aqui" | "jusbrasil" | "linkedin" | "instagram" | "facebook" | "youtube" | "twitter" | "noticias" | "google_places" }) {
   const configs: Record<string, { bg: string; text: string; border: string; icon: typeof Database; label: string }> = {
     receita: { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30", icon: Database, label: "Receita Federal" },
     ia: { bg: "bg-violet-500/15", text: "text-violet-400", border: "border-violet-500/30", icon: Sparkles, label: "Análise IA" },
@@ -39,6 +39,7 @@ function SourceBadge({ source }: { source: "receita" | "ia" | "firecrawl" | "rec
     youtube: { bg: "bg-red-600/15", text: "text-red-500", border: "border-red-600/30", icon: Youtube, label: "YouTube" },
     twitter: { bg: "bg-slate-500/15", text: "text-slate-400", border: "border-slate-500/30", icon: Twitter, label: "X / Twitter" },
     noticias: { bg: "bg-amber-500/15", text: "text-amber-400", border: "border-amber-500/30", icon: Newspaper, label: "Notícias" },
+    google_places: { bg: "bg-red-500/15", text: "text-red-400", border: "border-red-500/30", icon: MapPin, label: "Google Places" },
   };
   const c = configs[source] || configs.ia;
   const Icon = c.icon;
@@ -356,6 +357,12 @@ export function DossierDisplay({ dossier, dataSources, leadScore, forceShowTechn
                     <div className="flex items-center gap-1.5">
                       <SourceBadge source="noticias" />
                       <span>Notícias</span>
+                    </div>
+                  )}
+                  {dataSources.fontes_externas!.includes("google_places") && (
+                    <div className="flex items-center gap-1.5">
+                      <SourceBadge source="google_places" />
+                      <span>Google Places API</span>
                     </div>
                   )}
                 </>

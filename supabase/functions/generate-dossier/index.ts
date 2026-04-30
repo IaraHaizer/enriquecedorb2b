@@ -764,15 +764,59 @@ async function setCachedResult(cacheKey: string, result: FirecrawlResult): Promi
 
 function cleanCompanyNameForSearch(name: string): string {
   if (!name) return "";
-  const normalize = (s: string) => s
-    .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove accents
-
-  return normalize(name)
+  return name.toLowerCase()
     .replace(/\b(ltda|s\.?a\.?|eireli|me|epp|limitada?|despachos|assessoria|administracao|gestao|condominios?|imobiliaria|servicos?|comercio|industria|do brasil|brasileira?|de|do|da|dos|das|e)\b/gi, "")
-    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/[^a-z0-9\sà-ÿ]/gi, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+async function fetchGooglePlacesData(nomeEmpresa: string, endereco?: string): Promise<Record<string, unknown> | null> {
+  const apiKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+  if (!apiKey || !nomeEmpresa) return null;
+  
+  try {
+    const query = encodeURIComponent(`${nomeEmpresa} ${endereco || ""}`.trim());
+    const searchUrl = `https://places.googleapis.com/v1/places:searchText`;
+    
+    console.log(`[Google Places] Searching for: ${query}`);
+    const searchResponse = await fetch(searchUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "places.id,places.displayName,places.rating,places.userRatingCount,places.formattedAddress"
+      },
+      body: JSON.stringify({
+        textQuery: `${nomeEmpresa} ${endereco || ""}`.trim(),
+        languageCode: "pt-BR"
+      })
+    });
+    
+    if (!searchResponse.ok) {
+      console.warn(`[Google Places] Search failed: ${searchResponse.status}`);
+      return null;
+    }
+    
+    const searchData = await searchResponse.json();
+    if (!searchData.places || searchData.places.length === 0) {
+      console.log(`[Google Places] No place found for: ${nomeEmpresa}`);
+      return null;
+    }
+    
+    const place = searchData.places[0];
+    
+    return {
+      id: place.id,
+      nome: place.displayName?.text,
+      rating: place.rating,
+      user_ratings_total: place.userRatingCount,
+      endereco: place.formattedAddress
+    };
+  } catch (err) {
+    console.warn(`[Google Places] Error:`, err);
+    return null;
+  }
 }
 
 async function fetchExternalSources(
@@ -793,22 +837,22 @@ async function fetchExternalSources(
 
   // Build a smart query for LinkedIn
   const linkedinQuery = dominio 
-    ? `("${brandName}" OR "${dominio}") site:linkedin.com/company`
-    : `("${brandName}" OR "${empresaNome}") site:linkedin.com/company`;
+    ? `(${brandName} OR site:${dominio}) site:linkedin.com/company`
+    : `(${brandName} OR "${empresaNome}") site:linkedin.com/company`;
 
   const sources = [
-    { name: "reclame_aqui", query: `"${brandName}" site:reclameaqui.com.br`, opts: { limit: 3 } },
-    { name: "jusbrasil_escavador", query: `"${brandName}" (site:jusbrasil.com.br OR site:escavador.com)`, opts: { limit: 3 } },
+    { name: "reclame_aqui", query: `${brandName} site:reclameaqui.com.br`, opts: { limit: 3 } },
+    { name: "jusbrasil_escavador", query: `${brandName} (site:jusbrasil.com.br OR site:escavador.com)`, opts: { limit: 3 } },
     { name: "linkedin", query: linkedinQuery, opts: { limit: 5 } },
-    { name: "instagram", query: `"${brandName}" site:instagram.com`, opts: { limit: 3 } },
-    { name: "facebook", query: `"${brandName}" site:facebook.com`, opts: { limit: 3 } },
-    { name: "youtube", query: `"${brandName}" site:youtube.com`, opts: { limit: 2 } },
-    { name: "twitter_x", query: `"${brandName}" site:twitter.com OR site:x.com`, opts: { limit: 2 } },
-    { name: "google_news", query: `"${brandName}" notícias`, opts: { limit: 3, tbs: "qdr:y" } },
-    { name: "protestos_negativacoes", query: `"${brandName}" protesto OR negativação OR serasa`, opts: { limit: 3 } },
-    { name: "vagas_crescimento", query: `"${brandName}" vagas OR contratando OR expansão`, opts: { limit: 3, tbs: "qdr:m" } },
-    { name: "tech_stack", query: `"${brandName}" ERP OR software OR superlógica OR condomob`, opts: { limit: 3 } },
-    { name: "localizacao_contatos", query: `"${brandName}" site:casadosdados.com.br OR site:econodata.com.br OR site:cnpja.com`, opts: { limit: 3 } },
+    { name: "instagram", query: `${brandName} site:instagram.com`, opts: { limit: 3 } },
+    { name: "facebook", query: `${brandName} site:facebook.com`, opts: { limit: 3 } },
+    { name: "youtube", query: `${brandName} site:youtube.com`, opts: { limit: 2 } },
+    { name: "twitter_x", query: `${brandName} site:twitter.com OR site:x.com`, opts: { limit: 2 } },
+    { name: "google_news", query: `${brandName} notícias`, opts: { limit: 3, tbs: "qdr:y" } },
+    { name: "protestos_negativacoes", query: `${brandName} protesto OR negativação OR serasa`, opts: { limit: 3 } },
+    { name: "vagas_crescimento", query: `${brandName} vagas OR contratando OR expansão`, opts: { limit: 3, tbs: "qdr:m" } },
+    { name: "tech_stack", query: `${brandName} ERP OR software OR superlógica OR condomob`, opts: { limit: 3 } },
+    { name: "localizacao_contatos", query: `${brandName} site:casadosdados.com.br OR site:econodata.com.br OR site:cnpja.com`, opts: { limit: 3 } },
   ];
 
   // In Fast Mode, we skip most extensive searches to save time and credits
@@ -1540,7 +1584,7 @@ serve(async (req) => {
     }
 
     // Disparar consultas independentes
-    const [domainData, externalResults, externalPersonResults, seeklocData, ibgeData] = await Promise.all([
+    const [domainData, externalResults, externalPersonResults, seeklocData, ibgeData, googlePlacesData] = await Promise.all([
       fetchDomainInfo(empresaNome, cnpj, cnpjDataRef, !!skip_cache),
       fetchExternalSources(empresaNome, nomeFantasia, null, cnpj, enderecoCompleto, !!skip_cache, isFastMode),
       // Buscas focadas na PESSOA para input tipo email (reduzir no FastMode)
@@ -1549,7 +1593,8 @@ serve(async (req) => {
         !isFastMode ? firecrawlSearch(`"${personNomeDerivado}" site:instagram.com`, "person_instagram", { limit: 2 }) : Promise.resolve(null),
       ]) : Promise.resolve(null),
       seeklocDataRef ? Promise.resolve(seeklocDataRef) : (cnpj ? fetchSeeklocData({ documento: cnpj }) : (personEmail ? fetchSeeklocData({ email: personEmail }) : Promise.resolve(null))),
-      cnpjDataRef?.codigo_municipio_ibge ? fetchIbgeData(cnpjDataRef.codigo_municipio_ibge as string) : Promise.resolve(null)
+      cnpjDataRef?.codigo_municipio_ibge ? fetchIbgeData(cnpjDataRef.codigo_municipio_ibge as string) : Promise.resolve(null),
+      !isFastMode && empresaNome ? fetchGooglePlacesData(empresaNome, enderecoCompleto) : Promise.resolve(null)
     ]);
 
     const mainDomain = domainData.dominios[0]?.dominio;
@@ -1661,6 +1706,17 @@ serve(async (req) => {
         (ibgeData.pib ? `PIB Municipal: R$ ${Number(ibgeData.pib).toLocaleString("pt-BR")} mil (${ibgeData.pib_ano})\n` : "");
     }
 
+    let googlePlacesContext = "";
+    if (googlePlacesData && googlePlacesData.rating) {
+      googlePlacesContext = `\n=== AVALIAÇÕES DO GOOGLE (Google Places API) ===\n` +
+        `Empresa encontrada: ${googlePlacesData.nome}\n` +
+        `Nota (Rating): ${googlePlacesData.rating} / 5.0\n` +
+        `Total de Avaliações: ${googlePlacesData.user_ratings_total}\n` +
+        `Endereço no Google: ${googlePlacesData.endereco}\n` +
+        `\nINSTRUÇÃO: Use esta nota do Google para compor a "reputacao" da empresa e para ajustar o nível de risco ou argumentos de venda.\n` +
+        `=== FIM GOOGLE PLACES ===`;
+    }
+
     let seeklocContext = "";
     if (seeklocData) {
       seeklocContext = formatSeeklocContext(seeklocData);
@@ -1686,6 +1742,7 @@ ${internalDomainWarning}${cascadeContext ? `\n=== DADOS DO EFEITO CASCATA (Nome 
 ${cnpjContext ? `\n${cnpjContext}\n\nUse os dados reais acima como base principal para o dossiê.` : ""}
 ${apolloContext ? `\n${apolloContext}\n\nUse os dados do Apollo acima para preencher contatos_abordagem e validar o LinkedIn do sócio principal.` : ""}
 ${ibgeContext ? `\n${ibgeContext}\n\nUse os dados do IBGE para fornecer "contexto_regional" e estimar o ticket médio dos condomínios na região.` : ""}
+${googlePlacesContext ? `\n${googlePlacesContext}` : ""}
 ${seeklocContext ? `\n${seeklocContext}\n\nUse os dados do Seekloc como fonte secundária e altamente confiável para telefones, e-mails e endereços. Se houver divergência com a Receita Federal, mencione a existência de dados mais recentes no Seekloc.` : ""}
 ${personContext ? `\n${personContext}\n\nINSTRUÇÃO DE CRUZAMENTO — PERFIL DO CONTATO x EMPRESA:\nO perfil pessoal acima é de um decisor ou sócio da empresa analisada. Use esses dados para ENRIQUECER o dossiê da EMPRESA, não para fazer um dossiê da pessoa:\n- Use o cargo e empresa listados no LinkedIn para CONFIRMAR o porte e segmento da empresa.\n- Use o histórico profissional para entender o nível de maturidade e exigência da gestão (ex: sócio com passagem por grandes grupos = empresa bem estruturada).\n- Use menções a portfólio (ex: "gerenciamos 300 condomínios" no perfil) para estimar o volume da empresa.\n- Use o Instagram para capturar posicionamento de marca, estilo de comunicação, eventos, parcerias e sinais de crescimento da empresa.\n- Preencha socio_principal.linkedin com a URL real encontrada e socio_principal.historico_profissional com o que encontrou no perfil.\n- Preencha contatos_abordagem com a pessoa encontrada, incluindo canal preferencial baseado no perfil pessoal (ex: LinkedIn se for ativo lá).` : ""}
 ${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual. AS FONTES "localizacao_contatos" e "grupo_economico" trazem dados de localização e outras empresas no endereço — use-as para cruzar com o endereço da Receita e preencher grupos_economicos. A FONTE "direct_contacts" traz links diretos do site da empresa — use-a para encontrar WhatsApp e e-mails oficiais.` : ""}
@@ -1713,7 +1770,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           endereco: cnpjDataRef ? `${cnpjDataRef.logradouro || ""} ${cnpjDataRef.numero || ""}, ${cnpjDataRef.municipio || ""}/${cnpjDataRef.uf || ""}` : "Não identificado",
           telefone: cnpjDataRef?.ddd_telefone_1 || "Não identificado",
           redes_sociais: "Verificado no dashboard",
-          reputacao: "Busca ignorada (Fast Mode)",
+          reputacao: googlePlacesData ? `Google Maps: ${googlePlacesData.rating} (${googlePlacesData.user_ratings_total} avaliações)` : "Busca ignorada (Fast Mode)",
           atividade_principal: cnpjDataRef?.cnae_fiscal_descricao || "Não identificado",
           tecnologia_atual: "Busca ignorada (Fast Mode)",
           grupos_economicos: { identificado: false, detalhes: "Busca ignorada" },
@@ -1911,7 +1968,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
         ? ["nome", "cnpj", "situacao", "abertura", "porte", "capital_social", "endereco", "telefone", "atividade_principal", "mapeamento_socios"]
         : [],
       campos_ia: ["redes_sociais", "formacao_academica", "historico_profissional", "linkedin", "background_provavel", "insights_estrategicos", "logica_group_software", "risco_financeiro", "contatos_abordagem", "sinais_crescimento", "tecnologia_atual"],
-      fontes_externas: [...externalSourcesFound, ...(domainData.dominios.length > 0 ? ["dominios_whois"] : []), ...(seeklocData ? ["seekloc"] : [])],
+      fontes_externas: [...externalSourcesFound, ...(domainData.dominios.length > 0 ? ["dominios_whois"] : []), ...(seeklocData ? ["seekloc"] : []), ...(googlePlacesData ? ["google_places"] : [])],
       firecrawl_details: [
         ...externalResults.map((r) => ({
           source: r.source,
