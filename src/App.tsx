@@ -11,6 +11,7 @@ import BulkProcess from "./pages/BulkProcess.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AdminMetrics from "./pages/AdminMetrics.tsx";
 import AdminUsers from "./pages/AdminUsers.tsx";
+import AdminApiLogs from "./pages/AdminApiLogs.tsx";
 
 const queryClient = new QueryClient();
 
@@ -66,6 +67,7 @@ const App = () => (
           <Route path="/massa" element={<ProtectedRoute><BulkProcess /></ProtectedRoute>} />
           <Route path="/admin/metrics" element={<AdminRoute><AdminMetrics /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
+          <Route path="/admin/logs" element={<ProtectedRoute><AdminApiLogs /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
