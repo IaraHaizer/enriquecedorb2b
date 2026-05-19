@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, Filter, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
-type ApiName = "gemini" | "google_places" | "firecrawl" | "apollo" | "seekloc";
+type ApiName = "gemini" | "google_places" | "firecrawl" | "brasilapi" | "seekloc";
 
 interface LogRow {
   id: string;
@@ -40,7 +40,7 @@ const API_OPTIONS: { value: ApiName | "all"; label: string }[] = [
   { value: "gemini", label: "Gemini" },
   { value: "google_places", label: "Google Places" },
   { value: "firecrawl", label: "Firecrawl" },
-  { value: "apollo", label: "Apollo" },
+  { value: "brasilapi", label: "BrasilAPI" },
   { value: "seekloc", label: "Seekloc" },
 ];
 
