@@ -1,4 +1,4 @@
-import { Radar, LogOut, Search, BarChart3, History, Layers, LayoutDashboard, Users } from "lucide-react";
+import { Radar, LogOut, Search, BarChart3, History, Layers, LayoutDashboard, Users, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppNavLink } from "@/components/AppNavLink";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,6 +30,7 @@ export function AppHeader({ children }: AppHeaderProps) {
           <AppNavLink to="/ranking" icon={BarChart3} label="Ranking" active={location.pathname === '/ranking'} />
           <AppNavLink to="/historico" icon={History} label="Histórico" active={location.pathname === '/historico'} />
           <AppNavLink to="/massa" icon={Layers} label="Massa" active={location.pathname === '/massa'} />
+          <AppNavLink to="/admin/logs" icon={Activity} label="Logs API" active={location.pathname === '/admin/logs'} />
           
           {role === 'admin' && (
             <>
