@@ -526,6 +526,31 @@ async function firecrawlSearch(query: string, sourceName: string, options?: { li
   }
 }
 
+// Deep scrape de uma URL específica via Firecrawl (usado no LinkedIn Deep Scrape - Fase A)
+async function firecrawlScrape(url: string, sourceName: string): Promise<string> {
+  const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!apiKey) return "";
+  try {
+    console.log(`[Firecrawl Scrape] ${sourceName}: ${url}`);
+    const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true, timeout: 15000 }),
+    });
+    if (!response.ok) {
+      console.warn(`[Firecrawl Scrape] ${sourceName} HTTP ${response.status}`);
+      return "";
+    }
+    const data = await response.json();
+    const md = data?.data?.markdown || data?.markdown || "";
+    console.log(`[Firecrawl Scrape] ${sourceName} OK — ${md.length} chars`);
+    return md;
+  } catch (err) {
+    console.warn(`[Firecrawl Scrape] ${sourceName} error:`, err);
+    return "";
+  }
+}
+
 // Apollo desativado temporariamente (plano free não permite /people/match).
 // Enriquecimento de pessoas/contatos agora é feito via Seekloc (Unitfour).
 // Mantemos a assinatura para não quebrar o fluxo existente.
