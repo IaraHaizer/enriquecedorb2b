@@ -699,18 +699,21 @@ function formatSeeklocContext(data: any): string {
   const dtSituacao = fmtDate(p.dtsituacao);
   const dtObito = fmtDate(p.dtobito);
 
-  // Telefones
+  // Telefones — LIMITADO para não estourar contexto/tokens (empresas grandes podem ter 50+ números)
   const telefonesObj = p.telefones || {};
-  const fixos = Array.isArray(telefonesObj.fixo) ? telefonesObj.fixo : [];
-  const celulares = Array.isArray(telefonesObj.celulares) ? telefonesObj.celulares : [];
+  const fixos = (Array.isArray(telefonesObj.fixo) ? telefonesObj.fixo : []).slice(0, 3);
+  const celulares = (Array.isArray(telefonesObj.celulares) ? telefonesObj.celulares : []).slice(0, 8);
+  const totalFixos = telefonesObj.qtdefix ?? (Array.isArray(telefonesObj.fixo) ? telefonesObj.fixo.length : 0);
+  const totalCel = telefonesObj.qtdecel ?? (Array.isArray(telefonesObj.celulares) ? telefonesObj.celulares.length : 0);
   const phonesList: string[] = [];
   fixos.forEach((t: any) => phonesList.push(`(${t.ddd}) ${t.fone} [Fixo]`));
   celulares.forEach((t: any) => phonesList.push(`(${t.ddd}) ${t.fone} [Celular/WhatsApp]`));
 
-  // E-mails
+  // E-mails — limitado a 5
   const emailsRaw = p.emails || {};
-  const emailsArr = Array.isArray(emailsRaw) ? emailsRaw : (Array.isArray(emailsRaw.email) ? emailsRaw.email : []);
-  const emailsList = emailsArr.map((e: any) => (typeof e === "string" ? e : e.email)).filter(Boolean);
+  const emailsArrRaw = Array.isArray(emailsRaw) ? emailsRaw : (Array.isArray(emailsRaw.email) ? emailsRaw.email : []);
+  const emailsList = emailsArrRaw.map((e: any) => (typeof e === "string" ? e : e.email)).filter(Boolean).slice(0, 5);
+  const totalEmails = emailsRaw.qtde ?? emailsArrRaw.length;
 
   // Endereços
   const enderecosObj = p.enderecos || {};
@@ -770,17 +773,17 @@ function formatSeeklocContext(data: any): string {
 Nome/Razão Social: ${p.nome || "N/I"}
 ${p.fantasia ? `Nome Fantasia: ${p.fantasia}\n` : ""}Documento: ${doc || "N/I"}
 ${!isPJ && p.mae ? `Nome da Mãe: ${p.mae}\n` : ""}${dtNascAbertura ? `${isPJ ? "Data de Abertura" : "Data de Nascimento"}: ${dtNascAbertura}\n` : ""}${p.situacao ? `Situação: ${p.situacao}${dtSituacao ? ` (desde ${dtSituacao})` : ""}\n` : ""}${dtObito ? `⚠️ ÓBITO REGISTRADO: ${dtObito}\n` : ""}
-TELEFONES (${phonesList.length}):
+TELEFONES (mostrando ${phonesList.length} de ${Number(totalFixos) + Number(totalCel)} disponíveis):
 ${phonesList.length ? phonesList.map(t => `- ${t}`).join("\n") : "Nenhum"}
 
-E-MAILS (${emailsList.length}):
+E-MAILS (mostrando ${emailsList.length} de ${totalEmails} disponíveis):
 ${emailsList.length ? emailsList.map(e => `- ${e}`).join("\n") : "Nenhum"}
 
 ENDEREÇOS HISTÓRICOS (${addressLines.length}):
 ${addressLines.length ? addressLines.join("\n") : "Nenhum"}
 ${qsocLines.length ? `\nQUADRO SOCIETÁRIO ATUAL (${qsocArr.length}):\n${qsocLines.join("\n")}\n` : ""}${participLines.length ? `\nPARTICIPAÇÕES EM OUTRAS EMPRESAS (${participArr.length}) — INDICADOR DE GRUPO ECONÔMICO:\n${participLines.join("\n")}\n` : ""}${empregosLines.length ? `\nVÍNCULOS EMPREGATÍCIOS (${empregosArr.length}):\n${empregosLines.join("\n")}\n` : ""}${veiculosLines.length ? `\nVEÍCULOS REGISTRADOS (${veiculosArr.length}) — SINAL DE PORTE/FROTA:\n${veiculosLines.join("\n")}\n` : ""}${ccfQtde > 0 ? `\n🚨 CHEQUES SEM FUNDO (CCF) — ${ccfQtde} ocorrências:\n${ccfLines.join("\n") || "(detalhes não disponíveis)"}\n` : ""}${vizinhosLines.length ? `\nVIZINHOS/CONTATOS NO MESMO ENDEREÇO (${vizinhosArr.length}) — POSSÍVEIS LEADS ADJACENTES:\n${vizinhosLines.join("\n")}\n` : ""}${irmaosLines.length ? `\nRELACIONAMENTOS FAMILIARES (${irmaosArr.length}):\n${irmaosLines.join("\n")}\n` : ""}
 INSTRUÇÕES OBRIGATÓRIAS DE USO DOS DADOS SEEKLOC:
-1. Telefones e e-mails do Seekloc são ALTAMENTE CONFIÁVEIS e MAIS RECENTES que a Receita Federal — popule "contatos_abordagem" com TODOS eles (priorizando celulares para WhatsApp).
+1. ⚠️ LIMITE RÍGIDO: inclua no máximo 6 contatos em "contatos_abordagem" (priorize 1 fixo principal + até 5 celulares/WhatsApp DISTINTOS). NUNCA repita o mesmo telefone, NUNCA gere uma entrada por cada número listado. Se houver mais números, mencione "X linhas adicionais disponíveis no Seekloc" em vez de listá-las.
 2. Se houver PARTICIPAÇÕES EM OUTRAS EMPRESAS, preencha "grupos_economicos.identificado = true" e liste cada CNPJ encontrado em "grupos_economicos.detalhes" — isso revela o REAL tamanho do grupo (muito além do que aparece em buscas públicas).
 3. Se houver VÍNCULOS EMPREGATÍCIOS (PF), use o histórico para inferir maturidade profissional, setores anteriores e nível hierárquico do decisor — alimente "socio_principal.historico_profissional".
 4. Se houver VEÍCULOS, use a quantidade/tipo (utilitários, carros executivos, frota) como sinal complementar de porte e perfil patrimonial — mencione em "sinais_crescimento" se relevante.
@@ -2068,7 +2071,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userMessage },
           ],
-          max_tokens: 8192,
+          max_tokens: 16384,
         }),
       });
 
