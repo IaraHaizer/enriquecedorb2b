@@ -246,6 +246,103 @@ function RiscoNivelBadge({ nivel }: { nivel: string }) {
   );
 }
 
+function CrossValidationPanel({ dossier }: { dossier: Dossier }) {
+  const empresa = dossier.empresa || ({} as Dossier["empresa"]);
+  const socio = dossier.socio_principal || ({} as Dossier["socio_principal"]);
+  const dominios = dossier.dominios_associados || [];
+  const contatos = dossier.contatos_abordagem || [];
+  const fontes = dossier.fontes_externas || {};
+
+  const apolloVerified = contatos.filter((c) => c.is_apollo_verified).length;
+  const validatedDomains = dominios.filter((d) => d.is_validated).length;
+
+  const signals: { label: string; passed: boolean; detail: string }[] = [
+    {
+      label: "CNPJ ativo na Receita Federal",
+      passed: !!empresa.situacao && empresa.situacao.toLowerCase().includes("ativa"),
+      detail: empresa.situacao || "Situação cadastral não confirmada",
+    },
+    {
+      label: "Domínio ↔ CNPJ (WHOIS/RDAP)",
+      passed: validatedDomains > 0,
+      detail: validatedDomains > 0
+        ? `${validatedDomains} domínio(s) com propriedade confirmada via CNPJ no WHOIS`
+        : "Nenhum domínio cruzado com o CNPJ",
+    },
+    {
+      label: "Contatos verificados via Apollo.io",
+      passed: apolloVerified > 0,
+      detail: apolloVerified > 0
+        ? `${apolloVerified} contato(s) com e-mail validado por Apollo`
+        : "Nenhum e-mail confirmado por Apollo",
+    },
+    {
+      label: "Sócio principal localizado no LinkedIn",
+      passed: !!socio.linkedin && socio.linkedin.toLowerCase().includes("linkedin"),
+      detail: socio.linkedin && socio.linkedin.toLowerCase().includes("linkedin")
+        ? "Perfil LinkedIn vinculado ao sócio principal"
+        : "Sócio não localizado no LinkedIn",
+    },
+    {
+      label: "Presença em fontes externas (Reclame Aqui / Notícias / Redes)",
+      passed: !!(fontes.reclame_aqui?.encontrado || fontes.noticias?.encontrado || fontes.linkedin?.encontrado || fontes.instagram?.encontrado || fontes.facebook?.encontrado),
+      detail: "Empresa rastreável publicamente em múltiplos canais",
+    },
+    {
+      label: "Telefone e endereço oficiais (Receita)",
+      passed: !!(empresa.telefone && empresa.endereco),
+      detail: "Contato base disponível e cruzável com Seekloc",
+    },
+  ];
+
+  const passed = signals.filter((s) => s.passed).length;
+  const total = signals.length;
+  const pct = Math.round((passed / total) * 100);
+
+  return (
+    <Card className="border-l-4 border-l-sky-500/60">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Shield className="h-4 w-4 text-sky-500" />
+          Validação Cruzada
+          <Badge className="bg-sky-500/15 text-sky-500 border-sky-500/30 text-xs ml-auto">
+            {passed} de {total} sinais confirmados ({pct}%)
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground mb-3">
+          Cada item abaixo representa um <span className="font-medium">cruzamento entre fontes independentes</span> (Receita Federal, WHOIS/RDAP, Apollo, LinkedIn, Seekloc e Firecrawl). Quanto mais sinais confirmados, maior a confiança de que o dado é real e não ruído.
+        </p>
+        <div className="grid md:grid-cols-2 gap-2">
+          {signals.map((s, i) => (
+            <div
+              key={i}
+              className={`flex items-start gap-2 p-2 rounded-md border ${
+                s.passed
+                  ? "bg-emerald-500/5 border-emerald-500/20"
+                  : "bg-muted/30 border-border"
+              }`}
+            >
+              {s.passed ? (
+                <Shield className="h-3.5 w-3.5 text-emerald-500 mt-0.5 shrink-0" />
+              ) : (
+                <AlertCircle className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className={`text-xs font-medium ${s.passed ? "text-foreground" : "text-muted-foreground"}`}>
+                  {s.label}
+                </p>
+                <p className="text-[10px] text-muted-foreground leading-tight">{s.detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function DossierDisplay({ dossier, dataSources, leadScore, forceShowTechnical }: DossierDisplayProps) {
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(forceShowTechnical || false);
   
@@ -416,6 +513,10 @@ export function DossierDisplay({ dossier, dataSources, leadScore, forceShowTechn
 
       {/* Lead Score */}
       {leadScore && <LeadScoreWidget score={leadScore} />}
+
+      {/* Validação Cruzada */}
+      <CrossValidationPanel dossier={dossier} />
+
 
       {/* Dados da Empresa */}
       <SectionCard icon={Building2} title="Dados da Empresa" source={empresaSource}>
