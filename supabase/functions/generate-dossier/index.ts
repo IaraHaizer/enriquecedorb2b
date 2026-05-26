@@ -668,44 +668,128 @@ async function fetchSeeklocData(params: { documento?: string; email?: string; no
 
 function formatSeeklocContext(data: any): string {
   if (!data) return "";
-  
-  // No Postman do usuário, Sucesso é codocor: "0"
+
   const ocorrencia = data.ocorrencia || {};
-  if (ocorrencia.codocor !== "0") {
+  if (ocorrencia.codocor && ocorrencia.codocor !== "0") {
     console.log(`[Seekloc] API returned non-zero code: ${ocorrencia.codocor} - ${ocorrencia.msgocor}`);
     return "";
   }
-  
-  const p = data.pessoa || {};
-  
-  // Mapear Telefones (No Postman: { fixo: [], celulares: [] })
+
+  // CORREÇÃO CRÍTICA: os campos do Seekloc vêm no ROOT, não em data.pessoa
+  // (data.pessoa só existe em alguns endpoints legados; o tp=3 retorna tudo no root)
+  const p: any = data.pessoa && Object.keys(data.pessoa).length > 0 ? data.pessoa : data;
+
+  const doc = (p.doc || "").replace(/^0+/, "");
+  const isPJ = doc.length > 11;
+  const tipo = isPJ ? "Pessoa Jurídica" : "Pessoa Física";
+
+  // Datas formatadas (yyyymmdd ou ddmmyyyy)
+  const fmtDate = (raw: string) => {
+    if (!raw || raw.length < 8) return "";
+    // dois formatos possíveis
+    if (/^\d{8}$/.test(raw)) {
+      // yyyymmdd
+      if (raw.startsWith("19") || raw.startsWith("20")) return `${raw.slice(6,8)}/${raw.slice(4,6)}/${raw.slice(0,4)}`;
+      // ddmmyyyy
+      return `${raw.slice(0,2)}/${raw.slice(2,4)}/${raw.slice(4,8)}`;
+    }
+    return raw;
+  };
+  const dtNascAbertura = fmtDate(p.dtnasc_abertura);
+  const dtSituacao = fmtDate(p.dtsituacao);
+  const dtObito = fmtDate(p.dtobito);
+
+  // Telefones
   const telefonesObj = p.telefones || {};
   const fixos = Array.isArray(telefonesObj.fixo) ? telefonesObj.fixo : [];
   const celulares = Array.isArray(telefonesObj.celulares) ? telefonesObj.celulares : [];
-  
   const phonesList: string[] = [];
   fixos.forEach((t: any) => phonesList.push(`(${t.ddd}) ${t.fone} [Fixo]`));
-  celulares.forEach((t: any) => phonesList.push(`(${t.ddd}) ${t.fone} [Celular]`));
+  celulares.forEach((t: any) => phonesList.push(`(${t.ddd}) ${t.fone} [Celular/WhatsApp]`));
 
-  // Mapear E-mails (No Postman: Array direto)
-  const emailsArr = Array.isArray(p.emails) ? p.emails : [];
-  const emailsList = emailsArr.map((e: any) => e.email).filter(Boolean);
+  // E-mails
+  const emailsRaw = p.emails || {};
+  const emailsArr = Array.isArray(emailsRaw) ? emailsRaw : (Array.isArray(emailsRaw.email) ? emailsRaw.email : []);
+  const emailsList = emailsArr.map((e: any) => (typeof e === "string" ? e : e.email)).filter(Boolean);
 
-  // Mapear Endereços (No Postman: { endereco: [] })
+  // Endereços
   const enderecosObj = p.enderecos || {};
-  const addressesArr = Array.isArray(enderecosObj.endereco) ? enderecosObj.endereco : [];
-  const addressLines = addressesArr.map((e: any) => 
-    `- ${e.tipo || ""} ${e.logradouro || ""}, ${e.numero || ""} ${e.complemento || ""} - ${e.bairro || ""} - ${e.cidade || ""}/${e.uf || ""} (CEP: ${e.cep || ""})`
+  const addressesArr = Array.isArray(enderecosObj.endereco) ? enderecosObj.endereco : (Array.isArray(enderecosObj) ? enderecosObj : []);
+  const addressLines = addressesArr.map((e: any) =>
+    `- ${e.tipo || ""} ${e.logradouro || ""}${e.numero ? `, ${String(e.numero).replace(/^0+/, "") || "s/n"}` : ""}${e.complemento ? ` (${e.complemento})` : ""} - ${e.bairro || ""} - ${e.cidade || ""}/${e.uf || ""} (CEP: ${e.cep || ""})`
   );
-  
+
+  // Veículos
+  const veiculosArr = Array.isArray(p.veiculos?.veiculo) ? p.veiculos.veiculo : [];
+  const veiculosLines = veiculosArr.slice(0, 10).map((v: any) =>
+    `- ${v.marca || ""} ${v.modelo || ""} ${v.anomodelo || v.ano || ""} ${v.placa ? `(${v.placa})` : ""} ${v.combustivel || ""}`.replace(/\s+/g, " ").trim()
+  );
+
+  // Quadro societário (sócios da PJ)
+  const qsocArr = Array.isArray(p.quadrosoc?.qsoc) ? p.quadrosoc.qsoc : [];
+  const qsocLines = qsocArr.slice(0, 15).map((s: any) =>
+    `- ${s.nome || "N/I"} (CPF/CNPJ: ${s.doc || "N/I"}) - ${s.qualific || s.cargo || "Sócio(a)"}${s.percentual ? ` | ${s.percentual}%` : ""}`
+  );
+
+  // Participações societárias (em quais outras empresas a pessoa/empresa é sócia)
+  const participArr = Array.isArray(p.participsoc?.participsoc) ? p.participsoc.participsoc : (Array.isArray(p.participsoc?.particip) ? p.participsoc.particip : []);
+  const participLines = participArr.slice(0, 15).map((e: any) =>
+    `- ${e.nome || e.razao || "N/I"} (CNPJ: ${e.doc || e.cnpj || "N/I"})${e.qualific ? ` - ${e.qualific}` : ""}${e.percentual ? ` | ${e.percentual}%` : ""}${e.uf || e.cidade ? ` | ${e.cidade || ""}/${e.uf || ""}` : ""}`
+  );
+
+  // Vínculos empregatícios (PF)
+  const empregosArr = Array.isArray(p.empregos?.emprego) ? p.empregos.emprego : [];
+  const empregosLines = empregosArr.slice(0, 10).map((e: any) =>
+    `- ${e.empresa || e.nome || "N/I"} (CNPJ: ${e.doc || "N/I"})${e.cargo ? ` - ${e.cargo}` : ""}${e.dtadmissao ? ` | Adm: ${fmtDate(e.dtadmissao)}` : ""}${e.dtdemissao ? ` | Dem: ${fmtDate(e.dtdemissao)}` : " | ATIVO"}`
+  );
+
+  // Cheques sem fundo (CCF) — red flag financeiro
+  const ccfArr = Array.isArray(p.ccfs?.ccf) ? p.ccfs.ccf : [];
+  const ccfQtde = p.ccfs?.qtde ? Number(p.ccfs.qtde) : ccfArr.length;
+  const ccfLines = ccfArr.slice(0, 5).map((c: any) =>
+    `- Banco ${c.banco || "N/I"} | Ag: ${c.agencia || "N/I"} | Qtde: ${c.qtde || 1} | Última: ${fmtDate(c.dtult || "")}`
+  );
+
+  // Vizinhos (leads adjacentes no mesmo endereço/condomínio)
+  const vizinhosArr = Array.isArray(p.vizinhos?.vizinho) ? p.vizinhos.vizinho : [];
+  const vizinhosLines = vizinhosArr.slice(0, 5).map((v: any) =>
+    `- ${v.nome || "N/I"} (CPF: ${(v.cpf || "").replace(/^0+/, "")}) - ${v.logradouro || ""} ${v.numero || ""}`
+  );
+
+  // Irmãos / relacionamentos familiares (apenas para PF)
+  const irmaosArr = Array.isArray(p.irmaos?.irmao) ? p.irmaos.irmao : [];
+  const irmaosLines = irmaosArr.slice(0, 5).map((i: any) =>
+    `- ${i.nome || "N/I"} (CPF: ${(i.doc || i.cpf || "").replace(/^0+/, "")})`
+  );
+
+  const hasNothing = !p.nome && phonesList.length === 0 && emailsList.length === 0 && addressLines.length === 0 && qsocLines.length === 0;
+  if (hasNothing) return "";
+
   return `
-=== DADOS COMPLEMENTARES SEEKLOC (Unitfour) ===
-Pessoa/Empresa: ${p.nome || "N/I"}
-Documento: ${p.doc || "N/I"}
-Telefones Encontrados: ${phonesList.join(", ") || "N/A"}
-E-mails Encontrados: ${emailsList.join(", ") || "N/A"}
-Endereços Registrados:
-${addressLines.join("\n") || "N/A"}
+=== DADOS COMPLEMENTARES SEEKLOC / UNITFOUR (${tipo}) ===
+Nome/Razão Social: ${p.nome || "N/I"}
+${p.fantasia ? `Nome Fantasia: ${p.fantasia}\n` : ""}Documento: ${doc || "N/I"}
+${!isPJ && p.mae ? `Nome da Mãe: ${p.mae}\n` : ""}${dtNascAbertura ? `${isPJ ? "Data de Abertura" : "Data de Nascimento"}: ${dtNascAbertura}\n` : ""}${p.situacao ? `Situação: ${p.situacao}${dtSituacao ? ` (desde ${dtSituacao})` : ""}\n` : ""}${dtObito ? `⚠️ ÓBITO REGISTRADO: ${dtObito}\n` : ""}
+TELEFONES (${phonesList.length}):
+${phonesList.length ? phonesList.map(t => `- ${t}`).join("\n") : "Nenhum"}
+
+E-MAILS (${emailsList.length}):
+${emailsList.length ? emailsList.map(e => `- ${e}`).join("\n") : "Nenhum"}
+
+ENDEREÇOS HISTÓRICOS (${addressLines.length}):
+${addressLines.length ? addressLines.join("\n") : "Nenhum"}
+${qsocLines.length ? `\nQUADRO SOCIETÁRIO ATUAL (${qsocArr.length}):\n${qsocLines.join("\n")}\n` : ""}${participLines.length ? `\nPARTICIPAÇÕES EM OUTRAS EMPRESAS (${participArr.length}) — INDICADOR DE GRUPO ECONÔMICO:\n${participLines.join("\n")}\n` : ""}${empregosLines.length ? `\nVÍNCULOS EMPREGATÍCIOS (${empregosArr.length}):\n${empregosLines.join("\n")}\n` : ""}${veiculosLines.length ? `\nVEÍCULOS REGISTRADOS (${veiculosArr.length}) — SINAL DE PORTE/FROTA:\n${veiculosLines.join("\n")}\n` : ""}${ccfQtde > 0 ? `\n🚨 CHEQUES SEM FUNDO (CCF) — ${ccfQtde} ocorrências:\n${ccfLines.join("\n") || "(detalhes não disponíveis)"}\n` : ""}${vizinhosLines.length ? `\nVIZINHOS/CONTATOS NO MESMO ENDEREÇO (${vizinhosArr.length}) — POSSÍVEIS LEADS ADJACENTES:\n${vizinhosLines.join("\n")}\n` : ""}${irmaosLines.length ? `\nRELACIONAMENTOS FAMILIARES (${irmaosArr.length}):\n${irmaosLines.join("\n")}\n` : ""}
+INSTRUÇÕES OBRIGATÓRIAS DE USO DOS DADOS SEEKLOC:
+1. Telefones e e-mails do Seekloc são ALTAMENTE CONFIÁVEIS e MAIS RECENTES que a Receita Federal — popule "contatos_abordagem" com TODOS eles (priorizando celulares para WhatsApp).
+2. Se houver PARTICIPAÇÕES EM OUTRAS EMPRESAS, preencha "grupos_economicos.identificado = true" e liste cada CNPJ encontrado em "grupos_economicos.detalhes" — isso revela o REAL tamanho do grupo (muito além do que aparece em buscas públicas).
+3. Se houver VÍNCULOS EMPREGATÍCIOS (PF), use o histórico para inferir maturidade profissional, setores anteriores e nível hierárquico do decisor — alimente "socio_principal.historico_profissional".
+4. Se houver VEÍCULOS, use a quantidade/tipo (utilitários, carros executivos, frota) como sinal complementar de porte e perfil patrimonial — mencione em "sinais_crescimento" se relevante.
+5. Se houver CCF (cheques sem fundo) com qtde > 0, ELEVE "risco_financeiro.nivel_risco" para "Alto" e detalhe em "risco_financeiro.negativacoes" — é red flag crítico.
+6. Se houver ÓBITO registrado para a PF, sinalize URGENTE em status_integridade e oriente a abordagem para outro sócio/decisor.
+7. Use o NOME DA MÃE (PF) APENAS para validação interna de identidade (KYC) — NUNCA exponha esse dado no dossiê visível ao usuário final.
+8. Os ENDEREÇOS HISTÓRICOS revelam mudanças/expansão — se houver endereços em cidades diferentes, mencione possível atuação multi-praça.
+9. Os VIZINHOS NO MESMO ENDEREÇO podem ser empresas/pessoas do mesmo prédio comercial — mencione em "insights_estrategicos" como possíveis leads adjacentes para prospecção secundária (sem expor CPFs).
+10. Se a Receita Federal divergir do Seekloc, prefira o SEEKLOC para contato (telefone/e-mail) e a RECEITA para dados cadastrais oficiais (razão social, capital, situação).
 === FIM SEEKLOC ===`;
 }
 
@@ -1515,15 +1599,18 @@ serve(async (req) => {
           empresaNome = localPart;
           
           // TENTATIVA SEEKLOC POR E-MAIL/NOME (Já que não achou CNPJ)
+          // Helper: considera "encontrado" se tem doc/nome no root OU em .pessoa
+          const seeklocHasData = (d: any) => !!(d && (d.doc || d.nome || d.pessoa?.id || d.pessoa?.doc));
+
           console.log(`[Email Flow] Trying Seekloc by email: ${emailInput}`);
           const seeklocByEmail = await fetchSeeklocData({ email: emailInput });
-          if (seeklocByEmail?.pessoa?.id) {
-            seeklocDataDirect = seeklocByEmail; 
+          if (seeklocHasData(seeklocByEmail)) {
+            seeklocDataDirect = seeklocByEmail;
             console.log(`[Email Flow] Seekloc found data directly by email!`);
           } else {
             console.log(`[Email Flow] Seekloc by email failed, trying by name: ${localPart}`);
             const seeklocByName = await fetchSeeklocData({ nome: localPart });
-            if (seeklocByName?.pessoa?.id) {
+            if (seeklocHasData(seeklocByName)) {
               seeklocDataDirect = seeklocByName;
               console.log(`[Email Flow] Seekloc found data by name!`);
             }
@@ -1936,31 +2023,34 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           is_apollo_verified: true
         });
       }
-      // Populate contatos from Seekloc if found
-      if (seeklocData && seeklocData.pessoa) {
-         const p = seeklocData.pessoa;
-         if (p.telefones) {
-            (p.telefones as any[]).forEach(t => {
-               dossier.contatos_abordagem.push({
-                  nome: "Contato da Empresa",
-                  cargo: t.tipo || "Telefone",
-                  canal: "Telefone",
-                  contato: `(${t.ddd}) ${t.fone}`,
-                  fonte: "Unitfour"
-               });
+      // Populate contatos from Seekloc if found (campos vêm no root, não em .pessoa)
+      if (seeklocData) {
+         const p: any = seeklocData.pessoa && Object.keys(seeklocData.pessoa).length > 0 ? seeklocData.pessoa : seeklocData;
+         const telObj: any = p.telefones || {};
+         const fixos: any[] = Array.isArray(telObj.fixo) ? telObj.fixo : [];
+         const celulares: any[] = Array.isArray(telObj.celulares) ? telObj.celulares : [];
+         [...fixos.map((t) => ({ ...t, _tipo: "Fixo" })), ...celulares.map((t) => ({ ...t, _tipo: "Celular/WhatsApp" }))].forEach((t: any) => {
+            dossier.contatos_abordagem.push({
+               nome: "Contato da Empresa",
+               cargo: t._tipo,
+               canal: t._tipo === "Celular/WhatsApp" ? "WhatsApp" : "Telefone",
+               contato: `(${t.ddd}) ${t.fone}`,
+               fonte: "Seekloc/Unitfour"
             });
-         }
-         if (p.emails) {
-            (p.emails as any[]).forEach(e => {
-               dossier.contatos_abordagem.push({
-                  nome: "Contato da Empresa",
-                  cargo: "Email",
-                  canal: "Email corporativo",
-                  contato: e.email,
-                  fonte: "Unitfour"
-               });
+         });
+         const emailsRaw: any = p.emails || {};
+         const emailsArr: any[] = Array.isArray(emailsRaw) ? emailsRaw : (Array.isArray(emailsRaw.email) ? emailsRaw.email : []);
+         emailsArr.forEach((e: any) => {
+            const addr = typeof e === "string" ? e : e.email;
+            if (!addr) return;
+            dossier.contatos_abordagem.push({
+               nome: "Contato da Empresa",
+               cargo: "E-mail",
+               canal: "Email corporativo",
+               contato: addr,
+               fonte: "Seekloc/Unitfour"
             });
-         }
+         });
       }
 
     } else {
