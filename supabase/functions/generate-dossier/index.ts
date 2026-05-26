@@ -785,7 +785,7 @@ async function fetchGooglePlacesData(nomeEmpresa: string, endereco?: string): Pr
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.rating,places.userRatingCount,places.formattedAddress"
+        "X-Goog-FieldMask": "places.id,places.displayName,places.rating,places.userRatingCount,places.formattedAddress,places.reviews"
       },
       body: JSON.stringify({
         textQuery: `${nomeEmpresa} ${endereco || ""}`.trim(),
@@ -805,13 +805,23 @@ async function fetchGooglePlacesData(nomeEmpresa: string, endereco?: string): Pr
     }
     
     const place = searchData.places[0];
-    
+
+    const reviews = Array.isArray(place.reviews)
+      ? place.reviews.slice(0, 8).map((r: any) => ({
+          autor: r.authorAttribution?.displayName || "Anônimo",
+          nota: r.rating,
+          data: r.publishTime || r.relativePublishTimeDescription,
+          texto: (r.text?.text || r.originalText?.text || "").slice(0, 600),
+        })).filter((r: any) => r.texto)
+      : [];
+
     return {
       id: place.id,
       nome: place.displayName?.text,
       rating: place.rating,
       user_ratings_total: place.userRatingCount,
-      endereco: place.formattedAddress
+      endereco: place.formattedAddress,
+      reviews,
     };
   } catch (err) {
     console.warn(`[Google Places] Error:`, err);
