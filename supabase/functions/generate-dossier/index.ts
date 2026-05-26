@@ -1407,6 +1407,38 @@ serve(async (req) => {
       );
     }
 
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "Autenticação obrigatória" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ==================== BACKGROUND JOB MODE ====================
+    // Create job row, respond immediately, process in background via EdgeRuntime.waitUntil
+    const sbAdmin = getSupabaseAdmin();
+    const { data: jobRow, error: jobErr } = await sbAdmin
+      .from("dossier_jobs")
+      .insert({
+        user_id: userId,
+        input: input as string,
+        input_type: input_type as string,
+        skip_cache: !!skip_cache,
+        status: "processing",
+      })
+      .select("id")
+      .single();
+
+    if (jobErr || !jobRow) {
+      console.error("[Job] Failed to create job:", jobErr);
+      return new Response(
+        JSON.stringify({ error: "Falha ao criar job de processamento" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const jobId = jobRow.id as string;
+
+    const runPipeline = async (): Promise<Response> => {
     const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
     if (!OPENROUTER_API_KEY) {
       return new Response(
