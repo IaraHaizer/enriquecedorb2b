@@ -514,6 +514,10 @@ export function DossierDisplay({ dossier, dataSources, leadScore, forceShowTechn
       {/* Lead Score */}
       {leadScore && <LeadScoreWidget score={leadScore} />}
 
+      {/* Validação Cruzada */}
+      <CrossValidationPanel dossier={dossier} />
+
+
       {/* Dados da Empresa */}
       <SectionCard icon={Building2} title="Dados da Empresa" source={empresaSource}>
         <div className="grid md:grid-cols-2 gap-x-8">
