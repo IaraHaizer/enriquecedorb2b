@@ -2038,7 +2038,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           api_name: "gemini",
           credits_used: totalTokens,
           cost_usd: costUsd,
-          details: { prompt: promptTokens, completion: completionTokens, model: "gemini-2.5-flash" }
+          details: { prompt: promptTokens, completion: completionTokens, model: "gemini-2.5-flash-lite" }
         });
       }
 
