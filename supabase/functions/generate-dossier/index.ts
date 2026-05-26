@@ -2023,31 +2023,34 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           is_apollo_verified: true
         });
       }
-      // Populate contatos from Seekloc if found
-      if (seeklocData && seeklocData.pessoa) {
-         const p = seeklocData.pessoa;
-         if (p.telefones) {
-            (p.telefones as any[]).forEach(t => {
-               dossier.contatos_abordagem.push({
-                  nome: "Contato da Empresa",
-                  cargo: t.tipo || "Telefone",
-                  canal: "Telefone",
-                  contato: `(${t.ddd}) ${t.fone}`,
-                  fonte: "Unitfour"
-               });
+      // Populate contatos from Seekloc if found (campos vêm no root, não em .pessoa)
+      if (seeklocData) {
+         const p: any = seeklocData.pessoa && Object.keys(seeklocData.pessoa).length > 0 ? seeklocData.pessoa : seeklocData;
+         const telObj: any = p.telefones || {};
+         const fixos: any[] = Array.isArray(telObj.fixo) ? telObj.fixo : [];
+         const celulares: any[] = Array.isArray(telObj.celulares) ? telObj.celulares : [];
+         [...fixos.map((t) => ({ ...t, _tipo: "Fixo" })), ...celulares.map((t) => ({ ...t, _tipo: "Celular/WhatsApp" }))].forEach((t: any) => {
+            dossier.contatos_abordagem.push({
+               nome: "Contato da Empresa",
+               cargo: t._tipo,
+               canal: t._tipo === "Celular/WhatsApp" ? "WhatsApp" : "Telefone",
+               contato: `(${t.ddd}) ${t.fone}`,
+               fonte: "Seekloc/Unitfour"
             });
-         }
-         if (p.emails) {
-            (p.emails as any[]).forEach(e => {
-               dossier.contatos_abordagem.push({
-                  nome: "Contato da Empresa",
-                  cargo: "Email",
-                  canal: "Email corporativo",
-                  contato: e.email,
-                  fonte: "Unitfour"
-               });
+         });
+         const emailsRaw: any = p.emails || {};
+         const emailsArr: any[] = Array.isArray(emailsRaw) ? emailsRaw : (Array.isArray(emailsRaw.email) ? emailsRaw.email : []);
+         emailsArr.forEach((e: any) => {
+            const addr = typeof e === "string" ? e : e.email;
+            if (!addr) return;
+            dossier.contatos_abordagem.push({
+               nome: "Contato da Empresa",
+               cargo: "E-mail",
+               canal: "Email corporativo",
+               contato: addr,
+               fonte: "Seekloc/Unitfour"
             });
-         }
+         });
       }
 
     } else {
