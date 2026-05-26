@@ -2068,7 +2068,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userMessage },
           ],
-          max_tokens: 8192,
+          max_tokens: 16384,
         }),
       });
 
