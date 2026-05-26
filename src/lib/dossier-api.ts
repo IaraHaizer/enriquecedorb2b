@@ -198,14 +198,18 @@ export async function generateDossier(input: string, inputType: InputType, skipC
   const data_sources = (data.data_sources || { receita_federal: false, campos_receita: [], campos_ia: [], fontes_externas: [], firecrawl_details: [] }) as DataSources;
   const lead_score = (data.lead_score || undefined) as LeadScore | undefined;
 
-  // Save to history
-  await supabase.from("dossier_history").insert([{
-    input,
-    input_type: inputType,
-    empresa_nome: dossier.empresa?.nome || null,
-    empresa_cnpj: dossier.empresa?.cnpj || null,
-    dossier_data: JSON.parse(JSON.stringify(dossier)),
-  }]);
+  // Save to history (scoped to current user)
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    await supabase.from("dossier_history").insert([{
+      input,
+      input_type: inputType,
+      empresa_nome: dossier.empresa?.nome || null,
+      empresa_cnpj: dossier.empresa?.cnpj || null,
+      dossier_data: JSON.parse(JSON.stringify(dossier)),
+      user_id: user.id,
+    }]);
+  }
 
   return { dossier, data_sources, lead_score };
 }
