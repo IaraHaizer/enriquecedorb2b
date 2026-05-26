@@ -551,6 +551,126 @@ async function firecrawlScrape(url: string, sourceName: string): Promise<string>
   }
 }
 
+// ============= LINKEDIN PHASE C: Cache + Dedup + Confidence Score =============
+
+// Normaliza URLs do LinkedIn pra deduplicar variantes (?trk=, trailing slash, www, casing)
+function normalizeLinkedinUrl(raw: string): string {
+  if (!raw) return "";
+  try {
+    let u = raw.trim().split("?")[0].split("#")[0];
+    u = u.replace(/\/+$/, "");
+    u = u.replace(/^https?:\/\/(www\.)?/i, "https://www.");
+    return u.toLowerCase();
+  } catch {
+    return raw.toLowerCase();
+  }
+}
+
+// Cache 7d para /company/ e /in/ (mudam pouco); 24h para jobs/posts (sinais voláteis)
+async function cachedLinkedinScrape(
+  url: string,
+  sourceName: string,
+  ttlHours: number,
+  telemetry: { cacheHits: number; scrapes: number },
+): Promise<string> {
+  const normalized = normalizeLinkedinUrl(url);
+  if (!normalized) return "";
+  try {
+    const sb = getSupabaseAdmin();
+    const { data: cached } = await sb
+      .from("linkedin_scrape_cache")
+      .select("markdown, expires_at")
+      .eq("url", normalized)
+      .maybeSingle();
+    if (cached && cached.expires_at && new Date(cached.expires_at) > new Date()) {
+      telemetry.cacheHits++;
+      console.log(`[LinkedIn Cache] HIT ${sourceName} ${normalized}`);
+      return (cached.markdown as string) || "";
+    }
+    const md = await firecrawlScrape(url, sourceName);
+    telemetry.scrapes++;
+    if (md && md.length > 100) {
+      const expiresAt = new Date(Date.now() + ttlHours * 3600 * 1000).toISOString();
+      await sb.from("linkedin_scrape_cache").upsert({
+        url: normalized,
+        source: sourceName,
+        markdown: md,
+        scraped_at: new Date().toISOString(),
+        expires_at: expiresAt,
+      }, { onConflict: "url" });
+    }
+    return md;
+  } catch (err) {
+    console.warn(`[LinkedIn Cache] error ${sourceName}:`, err);
+    return await firecrawlScrape(url, sourceName);
+  }
+}
+
+// Similaridade simples (Jaccard de tokens) — 0..1
+function tokenSimilarity(a: string, b: string): number {
+  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((t) => t.length > 2);
+  const sa = new Set(norm(a));
+  const sb = new Set(norm(b));
+  if (sa.size === 0 || sb.size === 0) return 0;
+  let inter = 0;
+  for (const t of sa) if (sb.has(t)) inter++;
+  return inter / Math.min(sa.size, sb.size);
+}
+
+// Confidence 0-100 para uma página /company/ raspada
+function scoreCompanyPage(opts: {
+  slug: string;
+  markdown: string;
+  brand: string;
+  domain?: string | null;
+  municipio?: string | null;
+  uf?: string | null;
+  cnae?: string | null;
+}): number {
+  let score = 0;
+  const md = (opts.markdown || "").toLowerCase();
+  const slugClean = opts.slug.replace(/-/g, " ");
+  // slug vs brand
+  const slugSim = tokenSimilarity(slugClean, opts.brand);
+  score += Math.round(slugSim * 30);
+  // domain mention in markdown (forte)
+  if (opts.domain && md.includes(opts.domain.toLowerCase().replace(/^www\./, ""))) score += 30;
+  // brand mention in markdown
+  if (tokenSimilarity(md.slice(0, 4000), opts.brand) > 0.15) score += 15;
+  // cidade/UF
+  if (opts.municipio && md.includes(opts.municipio.toLowerCase())) score += 15;
+  else if (opts.uf && new RegExp(`\\b${opts.uf.toLowerCase()}\\b`).test(md)) score += 5;
+  // CNAE keyword
+  if (opts.cnae) {
+    const cnaeTokens = opts.cnae.toLowerCase().split(/\s+/).filter((t) => t.length > 4).slice(0, 3);
+    if (cnaeTokens.some((t) => md.includes(t))) score += 10;
+  }
+  return Math.min(100, score);
+}
+
+// Confidence 0-100 para uma página /in/<socio>
+function scorePersonPage(opts: {
+  markdown: string;
+  socioNome: string;
+  brand: string;
+}): number {
+  let score = 0;
+  const md = (opts.markdown || "").toLowerCase();
+  const firstChunk = md.slice(0, 1500); // headline + experiência atual
+  // nome do sócio: tokens raros tem que aparecer
+  const nameTokens = opts.socioNome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .split(/\s+/).filter((t) => t.length > 3);
+  const nameHits = nameTokens.filter((t) => firstChunk.includes(t)).length;
+  if (nameTokens.length > 0) score += Math.round((nameHits / nameTokens.length) * 50);
+  // marca aparece no headline/experiência?
+  if (tokenSimilarity(firstChunk, opts.brand) > 0.2) score += 35;
+  else if (md.includes(opts.brand.toLowerCase())) score += 15;
+  // perfil real (tem cargo/experiência típicos)
+  if (/experi[eê]ncia|experience|cargo|founder|ceo|cto|diretor|s[óo]cio/i.test(firstChunk)) score += 15;
+  return Math.min(100, score);
+}
+
 // Apollo desativado temporariamente (plano free não permite /people/match).
 // Enriquecimento de pessoas/contatos agora é feito via Seekloc (Unitfour).
 // Mantemos a assinatura para não quebrar o fluxo existente.
