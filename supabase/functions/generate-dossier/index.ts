@@ -1850,6 +1850,103 @@ serve(async (req) => {
       await Promise.all(phase2Promises);
     }
 
+    // === PHASE 3: LINKEDIN DEEP SCRAPE (Fase A) ===
+    // Em vez de depender só de snippets do Google, abrimos páginas reais do LinkedIn:
+    // 1) /company/<slug> (até 2)  2) /in/<socio> para cada sócio do QSA (até 3)  3) Apollo linkedin_url passthrough
+    let linkedinDeepContext = "";
+    if (!isFastMode) {
+      try {
+        const companyUrls = new Set<string>();
+
+        // 1) Empresa: extrair slugs únicos dos resultados da busca linkedin
+        const lkResult = externalResults.find((r) => r.source === "linkedin");
+        if (lkResult) {
+          for (const item of lkResult.results) {
+            const m = (item.url || "").match(/linkedin\.com\/company\/([^\/?#]+)/i);
+            if (m) {
+              companyUrls.add(`https://www.linkedin.com/company/${m[1].toLowerCase()}`);
+              if (companyUrls.size >= 2) break;
+            }
+          }
+        }
+
+        // 2) Apollo passthrough (LinkedIn da pessoa)
+        const apolloLinkedin = (apolloData as any)?.linkedin_url;
+        const personScrapeTargets: { url: string; socio: string; cargo: string }[] = [];
+        if (apolloLinkedin && typeof apolloLinkedin === "string" && /linkedin\.com\/in\//i.test(apolloLinkedin)) {
+          personScrapeTargets.push({
+            url: apolloLinkedin.split("?")[0],
+            socio: `${(apolloData as any)?.first_name || ""} ${(apolloData as any)?.last_name || ""}`.trim() || "Apollo Contact",
+            cargo: ((apolloData as any)?.title || (apolloData as any)?.job_title || "") as string,
+          });
+        }
+
+        // 3) Sócios do QSA — search + pick top /in/ URL
+        const socios = (cnpjDataRef?.qsa as Array<Record<string, string>>) || [];
+        const socioBrand = cleanCompanyNameForSearch(nomeFantasia || empresaNome).split(" ").slice(0, 3).join(" ").trim() || empresaNome;
+        const sociosToSearch = socios
+          .filter((s) => s.nome && s.nome.length > 5 && !/^(administrador|holding|fundo|investiment)/i.test(s.nome))
+          .slice(0, 3);
+
+        if (sociosToSearch.length > 0) {
+          const socioSearches = await Promise.all(
+            sociosToSearch.map((s) =>
+              firecrawlSearch(
+                `"${s.nome}" "${socioBrand}" site:linkedin.com/in`,
+                `socio_search_${s.nome.slice(0, 24)}`,
+                { limit: 2 }
+              )
+                .then((r) => {
+                  const top = r.results.find((x) => /linkedin\.com\/in\//i.test(x.url || ""));
+                  return top ? { url: top.url.split("?")[0], socio: s.nome, cargo: s.qual || "Sócio" } : null;
+                })
+                .catch(() => null)
+            )
+          );
+          for (const r of socioSearches) {
+            if (r && !personScrapeTargets.some((p) => p.url === r.url)) {
+              personScrapeTargets.push(r);
+            }
+          }
+        }
+
+        // 4) Scrape em paralelo (company + person)
+        const companyJobs = Array.from(companyUrls).map((u) =>
+          firecrawlScrape(u, "linkedin_company").then((md) => ({ kind: "company" as const, url: u, md }))
+        );
+        const personJobs = personScrapeTargets.map((t) =>
+          firecrawlScrape(t.url, `linkedin_in_${t.socio.slice(0, 20)}`).then((md) => ({ kind: "person" as const, ...t, md }))
+        );
+
+        if (companyJobs.length + personJobs.length > 0) {
+          console.log(`[LinkedIn Deep] Scraping ${companyJobs.length} company + ${personJobs.length} person pages`);
+          const scraped = await Promise.all([...companyJobs, ...personJobs]);
+          const parts: string[] = [];
+          for (const r of scraped) {
+            if (!r.md || r.md.length < 120) continue;
+            const snippet = r.md.slice(0, 2200);
+            if (r.kind === "company") {
+              parts.push(`--- LINKEDIN COMPANY PAGE (${r.url}) ---\n${snippet}`);
+            } else {
+              parts.push(`--- LINKEDIN /in/ — ${r.socio} (${r.cargo}) — ${r.url} ---\n${snippet}`);
+            }
+          }
+          if (parts.length > 0) {
+            linkedinDeepContext =
+              `\n=== LINKEDIN DEEP SCRAPE (páginas reais, não snippets) ===\n${parts.join("\n\n")}\n=== FIM LINKEDIN DEEP ===\n\n` +
+              `INSTRUÇÃO: Os blocos acima vêm de scraping direto do LinkedIn (páginas /company/ e /in/) e são a FONTE PRIMÁRIA para:\n` +
+              `- socio_principal: cargo atual, historico_profissional, formacao_academica, linkedin (URL real)\n` +
+              `- mapeamento_socios: enriquecer cada sócio do QSA com cargo/empresa atual encontrados no LinkedIn\n` +
+              `- Dados da empresa: headcount (número de funcionários), indústria, especialidades, descrição oficial, sede, ano de fundação, website\n` +
+              `Prefira estes dados aos snippets de busca em "DADOS DE FONTES EXTERNAS > LINKEDIN" sempre que houver conflito.`;
+            console.log(`[LinkedIn Deep] Built context with ${parts.length} sections (${linkedinDeepContext.length} chars)`);
+          }
+        }
+      } catch (err) {
+        console.warn("[LinkedIn Deep] Phase 3 error (non-fatal):", err);
+      }
+    }
+
     // Merge person-level results (LinkedIn/Instagram de pessoa) into context
     let personContext = "";
     if (externalPersonResults) {
