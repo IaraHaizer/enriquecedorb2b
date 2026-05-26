@@ -1915,7 +1915,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "google/gemini-2.5-flash-lite",
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userMessage },
@@ -1959,7 +1959,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           JSON.stringify({
             success: false,
             error: isLength
-              ? "Resposta da IA truncada (limite de tokens). Tente reduzir o escopo ou troque para gemini-2.5-pro."
+              ? "Resposta da IA truncada (limite de tokens). Tente reduzir o escopo ou troque para gemini-2.5-flash ou gemini-2.5-pro."
               : `Resposta vazia da IA${finishReason ? ` (motivo: ${finishReason})` : ""}`,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -2038,7 +2038,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           api_name: "gemini",
           credits_used: totalTokens,
           cost_usd: costUsd,
-          details: { prompt: promptTokens, completion: completionTokens, model: "gemini-2.5-flash" }
+          details: { prompt: promptTokens, completion: completionTokens, model: "gemini-2.5-flash-lite" }
         });
       }
 
