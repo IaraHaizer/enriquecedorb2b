@@ -2130,6 +2130,39 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
       JSON.stringify({ success: true, dossier, data_sources, lead_score }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+    }; // end runPipeline
+
+    // Kick off pipeline in background; persist result to dossier_jobs when done.
+    // @ts-ignore - EdgeRuntime is provided by Supabase Deno runtime
+    EdgeRuntime.waitUntil((async () => {
+      try {
+        const resp = await runPipeline();
+        let payload: Record<string, unknown> = {};
+        try { payload = await resp.json(); } catch { /* ignore */ }
+        if (payload.success) {
+          await sbAdmin.from("dossier_jobs").update({
+            status: "completed",
+            result: payload,
+          }).eq("id", jobId);
+        } else {
+          await sbAdmin.from("dossier_jobs").update({
+            status: "failed",
+            error: (payload.error as string) || "Erro desconhecido",
+          }).eq("id", jobId);
+        }
+      } catch (err) {
+        console.error("[Job] Pipeline failed:", err);
+        await sbAdmin.from("dossier_jobs").update({
+          status: "failed",
+          error: err instanceof Error ? err.message : "Erro desconhecido",
+        }).eq("id", jobId);
+      }
+    })());
+
+    return new Response(
+      JSON.stringify({ success: true, job_id: jobId, status: "processing" }),
+      { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (error) {
     console.error("Error generating dossier:", error);
     return new Response(
