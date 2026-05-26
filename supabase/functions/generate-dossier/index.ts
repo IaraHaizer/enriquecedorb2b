@@ -1407,6 +1407,38 @@ serve(async (req) => {
       );
     }
 
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "Autenticação obrigatória" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ==================== BACKGROUND JOB MODE ====================
+    // Create job row, respond immediately, process in background via EdgeRuntime.waitUntil
+    const sbAdmin = getSupabaseAdmin();
+    const { data: jobRow, error: jobErr } = await sbAdmin
+      .from("dossier_jobs")
+      .insert({
+        user_id: userId,
+        input: input as string,
+        input_type: input_type as string,
+        skip_cache: !!skip_cache,
+        status: "processing",
+      })
+      .select("id")
+      .single();
+
+    if (jobErr || !jobRow) {
+      console.error("[Job] Failed to create job:", jobErr);
+      return new Response(
+        JSON.stringify({ error: "Falha ao criar job de processamento" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const jobId = jobRow.id as string;
+
+    const runPipeline = async (): Promise<Response> => {
     const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
     if (!OPENROUTER_API_KEY) {
       return new Response(
@@ -2097,6 +2129,39 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
     return new Response(
       JSON.stringify({ success: true, dossier, data_sources, lead_score }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+    }; // end runPipeline
+
+    // Kick off pipeline in background; persist result to dossier_jobs when done.
+    // @ts-ignore - EdgeRuntime is provided by Supabase Deno runtime
+    EdgeRuntime.waitUntil((async () => {
+      try {
+        const resp = await runPipeline();
+        let payload: Record<string, unknown> = {};
+        try { payload = await resp.json(); } catch { /* ignore */ }
+        if (payload.success) {
+          await sbAdmin.from("dossier_jobs").update({
+            status: "completed",
+            result: payload,
+          }).eq("id", jobId);
+        } else {
+          await sbAdmin.from("dossier_jobs").update({
+            status: "failed",
+            error: (payload.error as string) || "Erro desconhecido",
+          }).eq("id", jobId);
+        }
+      } catch (err) {
+        console.error("[Job] Pipeline failed:", err);
+        await sbAdmin.from("dossier_jobs").update({
+          status: "failed",
+          error: err instanceof Error ? err.message : "Erro desconhecido",
+        }).eq("id", jobId);
+      }
+    })());
+
+    return new Response(
+      JSON.stringify({ success: true, job_id: jobId, status: "processing" }),
+      { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error generating dossier:", error);

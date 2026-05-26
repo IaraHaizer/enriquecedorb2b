@@ -77,6 +77,45 @@ export type Database = {
         }
         Relationships: []
       }
+      dossier_jobs: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          input: string
+          input_type: string
+          result: Json | null
+          skip_cache: boolean
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          input: string
+          input_type: string
+          result?: Json | null
+          skip_cache?: boolean
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          input?: string
+          input_type?: string
+          result?: Json | null
+          skip_cache?: boolean
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       firecrawl_cache: {
         Row: {
           cache_key: string

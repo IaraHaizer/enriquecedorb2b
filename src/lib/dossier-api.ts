@@ -190,13 +190,41 @@ export async function generateDossier(input: string, inputType: InputType, skipC
     throw new Error(error.message || "Erro ao gerar dossiê");
   }
 
-  if (!data?.success) {
-    throw new Error(data?.error || "Erro desconhecido");
+  if (!data?.success || !data?.job_id) {
+    throw new Error(data?.error || "Erro desconhecido ao iniciar processamento");
   }
 
-  const dossier = data.dossier as Dossier;
-  const data_sources = (data.data_sources || { receita_federal: false, campos_receita: [], campos_ia: [], fontes_externas: [], firecrawl_details: [] }) as DataSources;
-  const lead_score = (data.lead_score || undefined) as LeadScore | undefined;
+  const jobId = data.job_id as string;
+
+  // Poll job status. No client-side deadline — pipeline runs in background and
+  // can take several minutes for rich CNPJs. We poll every 3s indefinitely
+  // until the row is "completed" or "failed".
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let payload: { dossier: Dossier; data_sources?: DataSources; lead_score?: LeadScore } | null = null;
+
+  while (true) {
+    await sleep(3000);
+    const { data: job, error: jobErr } = await supabase
+      .from("dossier_jobs")
+      .select("status, result, error")
+      .eq("id", jobId)
+      .maybeSingle();
+
+    if (jobErr) throw new Error(jobErr.message);
+    if (!job) throw new Error("Job não encontrado");
+    if (job.status === "failed") throw new Error(job.error || "Falha no processamento");
+    if (job.status === "completed") {
+      payload = job.result as unknown as typeof payload;
+      break;
+    }
+    // status === 'processing' or 'pending' → keep polling
+  }
+
+  if (!payload?.dossier) throw new Error("Resultado do job inválido");
+
+  const dossier = payload.dossier;
+  const data_sources = (payload.data_sources || { receita_federal: false, campos_receita: [], campos_ia: [], fontes_externas: [], firecrawl_details: [] }) as DataSources;
+  const lead_score = (payload.lead_score || undefined) as LeadScore | undefined;
 
   // Save to history (scoped to current user)
   const { data: { user } } = await supabase.auth.getUser();
