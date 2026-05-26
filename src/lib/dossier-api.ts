@@ -214,7 +214,7 @@ export async function generateDossier(input: string, inputType: InputType, skipC
     if (!job) throw new Error("Job não encontrado");
     if (job.status === "failed") throw new Error(job.error || "Falha no processamento");
     if (job.status === "completed") {
-      payload = job.result as typeof payload;
+      payload = job.result as unknown as typeof payload;
       break;
     }
     // status === 'processing' or 'pending' → keep polling
