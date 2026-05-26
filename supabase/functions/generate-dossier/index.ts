@@ -1599,15 +1599,18 @@ serve(async (req) => {
           empresaNome = localPart;
           
           // TENTATIVA SEEKLOC POR E-MAIL/NOME (Já que não achou CNPJ)
+          // Helper: considera "encontrado" se tem doc/nome no root OU em .pessoa
+          const seeklocHasData = (d: any) => !!(d && (d.doc || d.nome || d.pessoa?.id || d.pessoa?.doc));
+
           console.log(`[Email Flow] Trying Seekloc by email: ${emailInput}`);
           const seeklocByEmail = await fetchSeeklocData({ email: emailInput });
-          if (seeklocByEmail?.pessoa?.id) {
-            seeklocDataDirect = seeklocByEmail; 
+          if (seeklocHasData(seeklocByEmail)) {
+            seeklocDataDirect = seeklocByEmail;
             console.log(`[Email Flow] Seekloc found data directly by email!`);
           } else {
             console.log(`[Email Flow] Seekloc by email failed, trying by name: ${localPart}`);
             const seeklocByName = await fetchSeeklocData({ nome: localPart });
-            if (seeklocByName?.pessoa?.id) {
+            if (seeklocHasData(seeklocByName)) {
               seeklocDataDirect = seeklocByName;
               console.log(`[Email Flow] Seekloc found data by name!`);
             }
