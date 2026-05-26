@@ -1947,6 +1947,71 @@ serve(async (req) => {
       }
     }
 
+    // === PHASE 3.5: LINKEDIN EVENT SIGNALS (Fase B) ===
+    // Sinais temporais: vagas abertas, posts recentes (últimos 30d), notícias recentes.
+    // Tudo isso alimenta "gatilhos de abordagem" — o SDR sabe POR QUE ligar AGORA.
+    let linkedinEventsContext = "";
+    if (!isFastMode && (nomeFantasia || empresaNome)) {
+      try {
+        const brandForEvents = cleanCompanyNameForSearch(nomeFantasia || empresaNome)
+          .split(" ").slice(0, 4).join(" ").trim();
+        if (brandForEvents.length >= 3) {
+          const [jobsRes, postsRes, newsRes] = await Promise.all([
+            // Vagas abertas no LinkedIn (sinal forte de crescimento / dor de operação)
+            firecrawlSearch(
+              `"${brandForEvents}" site:linkedin.com/jobs`,
+              "linkedin_jobs",
+              { limit: 5 }
+            ).catch(() => null),
+            // Posts/pulse últimos 30 dias (movimentações, lançamentos, conquistas)
+            firecrawlSearch(
+              `"${brandForEvents}" (site:linkedin.com/posts OR site:linkedin.com/pulse OR site:linkedin.com/feed)`,
+              "linkedin_posts_recentes",
+              { limit: 5, tbs: "qdr:m" }
+            ).catch(() => null),
+            // Notícias gerais recentes (mês) — gatilhos externos (rodada, M&A, expansão, prêmio)
+            firecrawlSearch(
+              `"${brandForEvents}" (rodada OR investimento OR expansão OR contratou OR lançou OR aquisição OR prêmio OR inauguração)`,
+              "noticias_recentes_30d",
+              { limit: 5, tbs: "qdr:m" }
+            ).catch(() => null),
+          ]);
+
+          const fmtBlock = (label: string, r: FirecrawlResult | null, max = 4) => {
+            if (!r || !r.results?.length) return "";
+            const lines = r.results.slice(0, max).map((x, i) => {
+              const desc = (x.description || "").slice(0, 220);
+              return `[${i + 1}] ${x.title || "(sem título)"}\n    ${x.url}\n    ${desc}`;
+            });
+            return `--- ${label} ---\n${lines.join("\n")}`;
+          };
+
+          const blocks = [
+            fmtBlock("VAGAS ABERTAS NO LINKEDIN", jobsRes),
+            fmtBlock("POSTS RECENTES NO LINKEDIN (últimos 30d)", postsRes),
+            fmtBlock("NOTÍCIAS RECENTES (últimos 30d)", newsRes),
+          ].filter(Boolean);
+
+          if (blocks.length > 0) {
+            linkedinEventsContext =
+              `\n=== SINAIS DE EVENTO / GATILHOS DE ABORDAGEM (últimos 30 dias) ===\n` +
+              blocks.join("\n\n") +
+              `\n=== FIM SINAIS DE EVENTO ===\n\n` +
+              `INSTRUÇÃO CRÍTICA: Os blocos acima são SINAIS TEMPORAIS e devem ser usados para:\n` +
+              `- Preencher "sinais_crescimento" com fatos datados e específicos (ex.: "3 vagas abertas para Engenharia em ${new Date().toLocaleDateString("pt-BR", { month: "long" })}", "Post anunciando expansão para SP em 12/${new Date().getMonth() + 1}").\n` +
+              `- Adicionar um campo/parágrafo "gatilhos_de_abordagem" dentro de "abordagem_estrategica" ou "gancho_venda": liste 2-4 motivos REAIS e DATADOS para o SDR ligar AGORA (ex.: "Empresa contratou 5 pessoas em outubro → escalando operação → momento ideal para apresentar módulo X"; "Lançaram nova unidade em SP → precisam centralizar gestão → módulo Y resolve").\n` +
+              `- Cada gatilho deve ter: (a) o fato observado, (b) a inferência comercial, (c) o produto/módulo Group/PartnerBank que se conecta àquele momento.\n` +
+              `- Se vagas mencionarem tecnologias específicas (React, AWS, etc.), considere isso em "tecnologia_atual".\n` +
+              `- NÃO invente fatos. Se um bloco veio vazio, simplesmente não cite. Honestidade > criatividade.`;
+            console.log(`[LinkedIn Events] Built context with ${blocks.length} signal blocks (${linkedinEventsContext.length} chars)`);
+          }
+        }
+      } catch (err) {
+        console.warn("[LinkedIn Events] Phase 3.5 error (non-fatal):", err);
+      }
+    }
+
+
     // Merge person-level results (LinkedIn/Instagram de pessoa) into context
     let personContext = "";
     if (externalPersonResults) {
@@ -2059,6 +2124,7 @@ ${googlePlacesContext ? `\n${googlePlacesContext}` : ""}
 ${seeklocContext ? `\n${seeklocContext}\n\nUse os dados do Seekloc como fonte secundária e altamente confiável para telefones, e-mails e endereços. Se houver divergência com a Receita Federal, mencione a existência de dados mais recentes no Seekloc.` : ""}
 ${personContext ? `\n${personContext}\n\nINSTRUÇÃO DE CRUZAMENTO — PERFIL DO CONTATO x EMPRESA:\nO perfil pessoal acima é de um decisor ou sócio da empresa analisada. Use esses dados para ENRIQUECER o dossiê da EMPRESA, não para fazer um dossiê da pessoa:\n- Use o cargo e empresa listados no LinkedIn para CONFIRMAR o porte e segmento da empresa.\n- Use o histórico profissional para entender o nível de maturidade e exigência da gestão (ex: sócio com passagem por grandes grupos = empresa bem estruturada).\n- Use menções a portfólio (ex: "gerenciamos 300 condomínios" no perfil) para estimar o volume da empresa.\n- Use o Instagram para capturar posicionamento de marca, estilo de comunicação, eventos, parcerias e sinais de crescimento da empresa.\n- Preencha socio_principal.linkedin com a URL real encontrada e socio_principal.historico_profissional com o que encontrou no perfil.\n- Preencha contatos_abordagem com a pessoa encontrada, incluindo canal preferencial baseado no perfil pessoal (ex: LinkedIn se for ativo lá).` : ""}
 ${linkedinDeepContext}
+${linkedinEventsContext}
 ${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual. AS FONTES "localizacao_contatos" e "grupo_economico" trazem dados de localização e outras empresas no endereço — use-as para cruzar com o endereço da Receita e preencher grupos_economicos. A FONTE "direct_contacts" traz links diretos do site da empresa — use-a para encontrar WhatsApp e e-mails oficiais.` : ""}
 ${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online. Se houver CONTEÚDO DO SITE, analise-o profundamente para extrair: serviços oferecidos, portfólio de condomínios/imóveis, equipe, diferenciais, tecnologias usadas, e qualquer informação que enriqueça o dossiê e a abordagem comercial.` : ""}
 
