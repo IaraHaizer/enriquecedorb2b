@@ -773,17 +773,17 @@ function formatSeeklocContext(data: any): string {
 Nome/Razão Social: ${p.nome || "N/I"}
 ${p.fantasia ? `Nome Fantasia: ${p.fantasia}\n` : ""}Documento: ${doc || "N/I"}
 ${!isPJ && p.mae ? `Nome da Mãe: ${p.mae}\n` : ""}${dtNascAbertura ? `${isPJ ? "Data de Abertura" : "Data de Nascimento"}: ${dtNascAbertura}\n` : ""}${p.situacao ? `Situação: ${p.situacao}${dtSituacao ? ` (desde ${dtSituacao})` : ""}\n` : ""}${dtObito ? `⚠️ ÓBITO REGISTRADO: ${dtObito}\n` : ""}
-TELEFONES (${phonesList.length}):
+TELEFONES (mostrando ${phonesList.length} de ${Number(totalFixos) + Number(totalCel)} disponíveis):
 ${phonesList.length ? phonesList.map(t => `- ${t}`).join("\n") : "Nenhum"}
 
-E-MAILS (${emailsList.length}):
+E-MAILS (mostrando ${emailsList.length} de ${totalEmails} disponíveis):
 ${emailsList.length ? emailsList.map(e => `- ${e}`).join("\n") : "Nenhum"}
 
 ENDEREÇOS HISTÓRICOS (${addressLines.length}):
 ${addressLines.length ? addressLines.join("\n") : "Nenhum"}
 ${qsocLines.length ? `\nQUADRO SOCIETÁRIO ATUAL (${qsocArr.length}):\n${qsocLines.join("\n")}\n` : ""}${participLines.length ? `\nPARTICIPAÇÕES EM OUTRAS EMPRESAS (${participArr.length}) — INDICADOR DE GRUPO ECONÔMICO:\n${participLines.join("\n")}\n` : ""}${empregosLines.length ? `\nVÍNCULOS EMPREGATÍCIOS (${empregosArr.length}):\n${empregosLines.join("\n")}\n` : ""}${veiculosLines.length ? `\nVEÍCULOS REGISTRADOS (${veiculosArr.length}) — SINAL DE PORTE/FROTA:\n${veiculosLines.join("\n")}\n` : ""}${ccfQtde > 0 ? `\n🚨 CHEQUES SEM FUNDO (CCF) — ${ccfQtde} ocorrências:\n${ccfLines.join("\n") || "(detalhes não disponíveis)"}\n` : ""}${vizinhosLines.length ? `\nVIZINHOS/CONTATOS NO MESMO ENDEREÇO (${vizinhosArr.length}) — POSSÍVEIS LEADS ADJACENTES:\n${vizinhosLines.join("\n")}\n` : ""}${irmaosLines.length ? `\nRELACIONAMENTOS FAMILIARES (${irmaosArr.length}):\n${irmaosLines.join("\n")}\n` : ""}
 INSTRUÇÕES OBRIGATÓRIAS DE USO DOS DADOS SEEKLOC:
-1. Telefones e e-mails do Seekloc são ALTAMENTE CONFIÁVEIS e MAIS RECENTES que a Receita Federal — popule "contatos_abordagem" com TODOS eles (priorizando celulares para WhatsApp).
+1. ⚠️ LIMITE RÍGIDO: inclua no máximo 6 contatos em "contatos_abordagem" (priorize 1 fixo principal + até 5 celulares/WhatsApp DISTINTOS). NUNCA repita o mesmo telefone, NUNCA gere uma entrada por cada número listado. Se houver mais números, mencione "X linhas adicionais disponíveis no Seekloc" em vez de listá-las.
 2. Se houver PARTICIPAÇÕES EM OUTRAS EMPRESAS, preencha "grupos_economicos.identificado = true" e liste cada CNPJ encontrado em "grupos_economicos.detalhes" — isso revela o REAL tamanho do grupo (muito além do que aparece em buscas públicas).
 3. Se houver VÍNCULOS EMPREGATÍCIOS (PF), use o histórico para inferir maturidade profissional, setores anteriores e nível hierárquico do decisor — alimente "socio_principal.historico_profissional".
 4. Se houver VEÍCULOS, use a quantidade/tipo (utilitários, carros executivos, frota) como sinal complementar de porte e perfil patrimonial — mencione em "sinais_crescimento" se relevante.
