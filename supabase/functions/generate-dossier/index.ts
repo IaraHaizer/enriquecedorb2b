@@ -2617,7 +2617,17 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
     }
 
     return new Response(
-      JSON.stringify({ success: true, dossier, data_sources, lead_score }),
+      JSON.stringify({
+        success: true,
+        dossier,
+        data_sources,
+        lead_score,
+        linkedin_debug: {
+          ...linkedinTelemetry,
+          cache_hits: telemetryCounter.cacheHits,
+          live_scrapes: telemetryCounter.scrapes,
+        },
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     }; // end runPipeline
