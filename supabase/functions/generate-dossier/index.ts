@@ -1970,22 +1970,45 @@ serve(async (req) => {
       await Promise.all(phase2Promises);
     }
 
-    // === PHASE 3: LINKEDIN DEEP SCRAPE (Fase A) ===
-    // Em vez de depender só de snippets do Google, abrimos páginas reais do LinkedIn:
-    // 1) /company/<slug> (até 2)  2) /in/<socio> para cada sócio do QSA (até 3)  3) Apollo linkedin_url passthrough
+    // === PHASE 3: LINKEDIN DEEP SCRAPE (Fase A + C: cache, dedup, confiança) ===
     let linkedinDeepContext = "";
+    // Telemetria compartilhada entre Phase 3 e 3.5
+    const linkedinTelemetry = {
+      companies_scraped: 0,
+      persons_scraped: 0,
+      cache_hits: 0,
+      scrapes: 0,
+      avg_confidence: 0,
+      discarded: [] as Array<{ url: string; score: number; reason: string; kind: string }>,
+    };
+    // Dedup global de URLs já raspadas no request (compartilhado com Phase 3.5)
+    const scrapedUrlsInRequest = new Set<string>();
+    const telemetryCounter = { cacheHits: 0, scrapes: 0 };
+
     if (!isFastMode) {
       try {
-        const companyUrls = new Set<string>();
+        // Dados de contexto para o score
+        const brandForScore = cleanCompanyNameForSearch(nomeFantasia || empresaNome).trim() || empresaNome;
+        const municipio = (cnpjDataRef?.municipio as string)?.toLowerCase() || null;
+        const uf = (cnpjDataRef?.uf as string)?.toLowerCase() || null;
+        const cnae = (cnpjDataRef?.cnae_fiscal_descricao as string) || null;
+        const domainHint = (domainInfo as any)?.domain_principal || null;
 
-        // 1) Empresa: extrair slugs únicos dos resultados da busca linkedin
+        // 1) Empresa: extrair slugs únicos dedupados
+        const companyUrls = new Set<string>();
         const lkResult = externalResults.find((r) => r.source === "linkedin");
         if (lkResult) {
           for (const item of lkResult.results) {
             const m = (item.url || "").match(/linkedin\.com\/company\/([^\/?#]+)/i);
             if (m) {
-              companyUrls.add(`https://www.linkedin.com/company/${m[1].toLowerCase()}`);
-              if (companyUrls.size >= 2) break;
+              const slug = m[1].toLowerCase();
+              const url = `https://www.linkedin.com/company/${slug}`;
+              const norm = normalizeLinkedinUrl(url);
+              if (!scrapedUrlsInRequest.has(norm)) {
+                companyUrls.add(url);
+                scrapedUrlsInRequest.add(norm);
+                if (companyUrls.size >= 2) break;
+              }
             }
           }
         }
@@ -1994,11 +2017,15 @@ serve(async (req) => {
         const apolloLinkedin = (apolloData as any)?.linkedin_url;
         const personScrapeTargets: { url: string; socio: string; cargo: string }[] = [];
         if (apolloLinkedin && typeof apolloLinkedin === "string" && /linkedin\.com\/in\//i.test(apolloLinkedin)) {
-          personScrapeTargets.push({
-            url: apolloLinkedin.split("?")[0],
-            socio: `${(apolloData as any)?.first_name || ""} ${(apolloData as any)?.last_name || ""}`.trim() || "Apollo Contact",
-            cargo: ((apolloData as any)?.title || (apolloData as any)?.job_title || "") as string,
-          });
+          const norm = normalizeLinkedinUrl(apolloLinkedin);
+          if (!scrapedUrlsInRequest.has(norm)) {
+            personScrapeTargets.push({
+              url: apolloLinkedin.split("?")[0],
+              socio: `${(apolloData as any)?.first_name || ""} ${(apolloData as any)?.last_name || ""}`.trim() || "Apollo Contact",
+              cargo: ((apolloData as any)?.title || (apolloData as any)?.job_title || "") as string,
+            });
+            scrapedUrlsInRequest.add(norm);
+          }
         }
 
         // 3) Sócios do QSA — search + pick top /in/ URL
@@ -2024,42 +2051,79 @@ serve(async (req) => {
             )
           );
           for (const r of socioSearches) {
-            if (r && !personScrapeTargets.some((p) => p.url === r.url)) {
-              personScrapeTargets.push(r);
-            }
+            if (!r) continue;
+            const norm = normalizeLinkedinUrl(r.url);
+            if (scrapedUrlsInRequest.has(norm)) continue;
+            personScrapeTargets.push(r);
+            scrapedUrlsInRequest.add(norm);
           }
         }
 
-        // 4) Scrape em paralelo (company + person)
+        // 4) Scrape em paralelo (com cache 7d)
         const companyJobs = Array.from(companyUrls).map((u) =>
-          firecrawlScrape(u, "linkedin_company").then((md) => ({ kind: "company" as const, url: u, md }))
+          cachedLinkedinScrape(u, "linkedin_company", 24 * 7, telemetryCounter)
+            .then((md) => ({ kind: "company" as const, url: u, md }))
         );
         const personJobs = personScrapeTargets.map((t) =>
-          firecrawlScrape(t.url, `linkedin_in_${t.socio.slice(0, 20)}`).then((md) => ({ kind: "person" as const, ...t, md }))
+          cachedLinkedinScrape(t.url, `linkedin_in_${t.socio.slice(0, 20)}`, 24 * 7, telemetryCounter)
+            .then((md) => ({ kind: "person" as const, ...t, md }))
         );
 
         if (companyJobs.length + personJobs.length > 0) {
           console.log(`[LinkedIn Deep] Scraping ${companyJobs.length} company + ${personJobs.length} person pages`);
           const scraped = await Promise.all([...companyJobs, ...personJobs]);
           const parts: string[] = [];
+          const scores: number[] = [];
+          const CONFIDENCE_THRESHOLD = 50;
+
           for (const r of scraped) {
-            if (!r.md || r.md.length < 120) continue;
+            if (!r.md || r.md.length < 120) {
+              linkedinTelemetry.discarded.push({ url: r.url, score: 0, reason: "scrape vazio/curto", kind: r.kind });
+              continue;
+            }
             const snippet = r.md.slice(0, 2200);
             if (r.kind === "company") {
-              parts.push(`--- LINKEDIN COMPANY PAGE (${r.url}) ---\n${snippet}`);
+              const slug = (r.url.match(/\/company\/([^\/?#]+)/i)?.[1] || "").toLowerCase();
+              const score = scoreCompanyPage({
+                slug, markdown: r.md, brand: brandForScore,
+                domain: domainHint, municipio, uf, cnae,
+              });
+              if (score < CONFIDENCE_THRESHOLD) {
+                linkedinTelemetry.discarded.push({ url: r.url, score, reason: `confiança ${score}<${CONFIDENCE_THRESHOLD} — provável homônimo`, kind: "company" });
+                console.log(`[LinkedIn Deep] DESCARTADO company score=${score}: ${r.url}`);
+                continue;
+              }
+              scores.push(score);
+              linkedinTelemetry.companies_scraped++;
+              parts.push(`--- LINKEDIN COMPANY PAGE (${r.url}) [confiança: ${score}/100] ---\n${snippet}`);
             } else {
-              parts.push(`--- LINKEDIN /in/ — ${r.socio} (${r.cargo}) — ${r.url} ---\n${snippet}`);
+              const score = scorePersonPage({ markdown: r.md, socioNome: r.socio, brand: brandForScore });
+              if (score < CONFIDENCE_THRESHOLD) {
+                linkedinTelemetry.discarded.push({ url: r.url, score, reason: `confiança ${score}<${CONFIDENCE_THRESHOLD} — sócio/empresa não casaram`, kind: "person" });
+                console.log(`[LinkedIn Deep] DESCARTADO person ${r.socio} score=${score}: ${r.url}`);
+                continue;
+              }
+              scores.push(score);
+              linkedinTelemetry.persons_scraped++;
+              parts.push(`--- LINKEDIN /in/ — ${r.socio} (${r.cargo}) — ${r.url} [confiança: ${score}/100] ---\n${snippet}`);
             }
           }
+
+          if (scores.length > 0) {
+            linkedinTelemetry.avg_confidence = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+          }
+
           if (parts.length > 0) {
             linkedinDeepContext =
-              `\n=== LINKEDIN DEEP SCRAPE (páginas reais, não snippets) ===\n${parts.join("\n\n")}\n=== FIM LINKEDIN DEEP ===\n\n` +
-              `INSTRUÇÃO: Os blocos acima vêm de scraping direto do LinkedIn (páginas /company/ e /in/) e são a FONTE PRIMÁRIA para:\n` +
+              `\n=== LINKEDIN DEEP SCRAPE (páginas reais, validadas por score de confiança) ===\n${parts.join("\n\n")}\n=== FIM LINKEDIN DEEP ===\n\n` +
+              `INSTRUÇÃO: Os blocos acima vêm de scraping direto do LinkedIn e PASSARAM em validação de confiança (slug/domínio/cidade/nome do sócio batem com o CNPJ alvo). São a FONTE PRIMÁRIA para:\n` +
               `- socio_principal: cargo atual, historico_profissional, formacao_academica, linkedin (URL real)\n` +
-              `- mapeamento_socios: enriquecer cada sócio do QSA com cargo/empresa atual encontrados no LinkedIn\n` +
-              `- Dados da empresa: headcount (número de funcionários), indústria, especialidades, descrição oficial, sede, ano de fundação, website\n` +
+              `- mapeamento_socios: enriquecer cada sócio do QSA com cargo/empresa atual encontrados\n` +
+              `- Dados da empresa: headcount, indústria, especialidades, descrição oficial, sede, ano de fundação, website\n` +
               `Prefira estes dados aos snippets de busca em "DADOS DE FONTES EXTERNAS > LINKEDIN" sempre que houver conflito.`;
-            console.log(`[LinkedIn Deep] Built context with ${parts.length} sections (${linkedinDeepContext.length} chars)`);
+            console.log(`[LinkedIn Deep] Built context with ${parts.length} sections, avg_confidence=${linkedinTelemetry.avg_confidence}, discarded=${linkedinTelemetry.discarded.length}`);
+          } else if (linkedinTelemetry.discarded.length > 0) {
+            console.warn(`[LinkedIn Deep] TODOS os ${linkedinTelemetry.discarded.length} candidatos foram descartados por baixa confiança.`);
           }
         }
       } catch (err) {
