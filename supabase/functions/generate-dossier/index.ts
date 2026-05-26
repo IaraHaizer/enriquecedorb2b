@@ -1959,7 +1959,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           JSON.stringify({
             success: false,
             error: isLength
-              ? "Resposta da IA truncada (limite de tokens). Tente reduzir o escopo ou troque para gemini-2.5-pro."
+              ? "Resposta da IA truncada (limite de tokens). Tente reduzir o escopo ou troque para gemini-2.5-flash ou gemini-2.5-pro."
               : `Resposta vazia da IA${finishReason ? ` (motivo: ${finishReason})` : ""}`,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
