@@ -1992,7 +1992,7 @@ serve(async (req) => {
         const municipio = (cnpjDataRef?.municipio as string)?.toLowerCase() || null;
         const uf = (cnpjDataRef?.uf as string)?.toLowerCase() || null;
         const cnae = (cnpjDataRef?.cnae_fiscal_descricao as string) || null;
-        const domainHint = (domainInfo as any)?.domain_principal || null;
+        const domainHint = (domainData?.dominios?.[0]?.dominio as string) || null;
 
         // 1) Empresa: extrair slugs únicos dedupados
         const companyUrls = new Set<string>();
