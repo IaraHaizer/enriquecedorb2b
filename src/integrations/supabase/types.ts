@@ -149,6 +149,30 @@ export type Database = {
         }
         Relationships: []
       }
+      linkedin_scrape_cache: {
+        Row: {
+          expires_at: string
+          markdown: string
+          scraped_at: string
+          source: string
+          url: string
+        }
+        Insert: {
+          expires_at?: string
+          markdown?: string
+          scraped_at?: string
+          source: string
+          url: string
+        }
+        Update: {
+          expires_at?: string
+          markdown?: string
+          scraped_at?: string
+          source?: string
+          url?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
