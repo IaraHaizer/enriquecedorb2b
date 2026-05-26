@@ -109,9 +109,39 @@
     display: none !important;
   }
 
-  body {
+  /* Force light theme tokens for print regardless of app theme */
+  :root, .dark, html, body {
+    background: white !important;
     background-color: white !important;
-    color: black !important;
+    color: #0f172a !important;
+    color-scheme: light !important;
+    --background: 0 0% 100% !important;
+    --foreground: 222 47% 11% !important;
+    --card: 0 0% 100% !important;
+    --card-foreground: 222 47% 11% !important;
+    --popover: 0 0% 100% !important;
+    --popover-foreground: 222 47% 11% !important;
+    --muted: 210 40% 96% !important;
+    --muted-foreground: 215 25% 27% !important;
+    --secondary: 210 40% 96% !important;
+    --secondary-foreground: 222 47% 11% !important;
+    --accent: 210 40% 96% !important;
+    --accent-foreground: 222 47% 11% !important;
+    --border: 214 32% 85% !important;
+    --input: 214 32% 85% !important;
+  }
+
+  /* Make every text element readable */
+  *, *::before, *::after {
+    color: #0f172a !important;
+    text-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .text-muted-foreground,
+  [class*="text-muted"] {
+    color: #475569 !important;
   }
 
   .print-container {
@@ -121,23 +151,17 @@
     width: 100% !important;
   }
 
-  .card {
+  .card,
+  [class*="bg-card"],
+  [class*="bg-secondary"],
+  [class*="bg-background"] {
+    background-color: #ffffff !important;
     border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
     break-inside: avoid !important;
     margin-bottom: 20px !important;
-    box-shadow: none !important;
   }
 
-  .dark {
-    color-scheme: light !important;
-  }
-
-  .bg-card, .bg-secondary {
-    background-color: #f8fafc !important;
-    -webkit-print-color-adjust: exact !important;
-  }
-
-  /* Page breaks for bulk reports */
   .page-break-before {
     break-before: page !important;
     padding-top: 2rem !important;
@@ -146,12 +170,6 @@
   .dossier-print-item {
     break-inside: avoid !important;
     margin-bottom: 2rem !important;
-  }
-
-  /* Force background colors in print */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
   }
 }
 
