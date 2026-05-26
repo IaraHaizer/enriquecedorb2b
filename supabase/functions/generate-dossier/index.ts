@@ -526,6 +526,31 @@ async function firecrawlSearch(query: string, sourceName: string, options?: { li
   }
 }
 
+// Deep scrape de uma URL específica via Firecrawl (usado no LinkedIn Deep Scrape - Fase A)
+async function firecrawlScrape(url: string, sourceName: string): Promise<string> {
+  const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!apiKey) return "";
+  try {
+    console.log(`[Firecrawl Scrape] ${sourceName}: ${url}`);
+    const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true, timeout: 15000 }),
+    });
+    if (!response.ok) {
+      console.warn(`[Firecrawl Scrape] ${sourceName} HTTP ${response.status}`);
+      return "";
+    }
+    const data = await response.json();
+    const md = data?.data?.markdown || data?.markdown || "";
+    console.log(`[Firecrawl Scrape] ${sourceName} OK — ${md.length} chars`);
+    return md;
+  } catch (err) {
+    console.warn(`[Firecrawl Scrape] ${sourceName} error:`, err);
+    return "";
+  }
+}
+
 // Apollo desativado temporariamente (plano free não permite /people/match).
 // Enriquecimento de pessoas/contatos agora é feito via Seekloc (Unitfour).
 // Mantemos a assinatura para não quebrar o fluxo existente.
@@ -1825,6 +1850,103 @@ serve(async (req) => {
       await Promise.all(phase2Promises);
     }
 
+    // === PHASE 3: LINKEDIN DEEP SCRAPE (Fase A) ===
+    // Em vez de depender só de snippets do Google, abrimos páginas reais do LinkedIn:
+    // 1) /company/<slug> (até 2)  2) /in/<socio> para cada sócio do QSA (até 3)  3) Apollo linkedin_url passthrough
+    let linkedinDeepContext = "";
+    if (!isFastMode) {
+      try {
+        const companyUrls = new Set<string>();
+
+        // 1) Empresa: extrair slugs únicos dos resultados da busca linkedin
+        const lkResult = externalResults.find((r) => r.source === "linkedin");
+        if (lkResult) {
+          for (const item of lkResult.results) {
+            const m = (item.url || "").match(/linkedin\.com\/company\/([^\/?#]+)/i);
+            if (m) {
+              companyUrls.add(`https://www.linkedin.com/company/${m[1].toLowerCase()}`);
+              if (companyUrls.size >= 2) break;
+            }
+          }
+        }
+
+        // 2) Apollo passthrough (LinkedIn da pessoa)
+        const apolloLinkedin = (apolloData as any)?.linkedin_url;
+        const personScrapeTargets: { url: string; socio: string; cargo: string }[] = [];
+        if (apolloLinkedin && typeof apolloLinkedin === "string" && /linkedin\.com\/in\//i.test(apolloLinkedin)) {
+          personScrapeTargets.push({
+            url: apolloLinkedin.split("?")[0],
+            socio: `${(apolloData as any)?.first_name || ""} ${(apolloData as any)?.last_name || ""}`.trim() || "Apollo Contact",
+            cargo: ((apolloData as any)?.title || (apolloData as any)?.job_title || "") as string,
+          });
+        }
+
+        // 3) Sócios do QSA — search + pick top /in/ URL
+        const socios = (cnpjDataRef?.qsa as Array<Record<string, string>>) || [];
+        const socioBrand = cleanCompanyNameForSearch(nomeFantasia || empresaNome).split(" ").slice(0, 3).join(" ").trim() || empresaNome;
+        const sociosToSearch = socios
+          .filter((s) => s.nome && s.nome.length > 5 && !/^(administrador|holding|fundo|investiment)/i.test(s.nome))
+          .slice(0, 3);
+
+        if (sociosToSearch.length > 0) {
+          const socioSearches = await Promise.all(
+            sociosToSearch.map((s) =>
+              firecrawlSearch(
+                `"${s.nome}" "${socioBrand}" site:linkedin.com/in`,
+                `socio_search_${s.nome.slice(0, 24)}`,
+                { limit: 2 }
+              )
+                .then((r) => {
+                  const top = r.results.find((x) => /linkedin\.com\/in\//i.test(x.url || ""));
+                  return top ? { url: top.url.split("?")[0], socio: s.nome, cargo: s.qual || "Sócio" } : null;
+                })
+                .catch(() => null)
+            )
+          );
+          for (const r of socioSearches) {
+            if (r && !personScrapeTargets.some((p) => p.url === r.url)) {
+              personScrapeTargets.push(r);
+            }
+          }
+        }
+
+        // 4) Scrape em paralelo (company + person)
+        const companyJobs = Array.from(companyUrls).map((u) =>
+          firecrawlScrape(u, "linkedin_company").then((md) => ({ kind: "company" as const, url: u, md }))
+        );
+        const personJobs = personScrapeTargets.map((t) =>
+          firecrawlScrape(t.url, `linkedin_in_${t.socio.slice(0, 20)}`).then((md) => ({ kind: "person" as const, ...t, md }))
+        );
+
+        if (companyJobs.length + personJobs.length > 0) {
+          console.log(`[LinkedIn Deep] Scraping ${companyJobs.length} company + ${personJobs.length} person pages`);
+          const scraped = await Promise.all([...companyJobs, ...personJobs]);
+          const parts: string[] = [];
+          for (const r of scraped) {
+            if (!r.md || r.md.length < 120) continue;
+            const snippet = r.md.slice(0, 2200);
+            if (r.kind === "company") {
+              parts.push(`--- LINKEDIN COMPANY PAGE (${r.url}) ---\n${snippet}`);
+            } else {
+              parts.push(`--- LINKEDIN /in/ — ${r.socio} (${r.cargo}) — ${r.url} ---\n${snippet}`);
+            }
+          }
+          if (parts.length > 0) {
+            linkedinDeepContext =
+              `\n=== LINKEDIN DEEP SCRAPE (páginas reais, não snippets) ===\n${parts.join("\n\n")}\n=== FIM LINKEDIN DEEP ===\n\n` +
+              `INSTRUÇÃO: Os blocos acima vêm de scraping direto do LinkedIn (páginas /company/ e /in/) e são a FONTE PRIMÁRIA para:\n` +
+              `- socio_principal: cargo atual, historico_profissional, formacao_academica, linkedin (URL real)\n` +
+              `- mapeamento_socios: enriquecer cada sócio do QSA com cargo/empresa atual encontrados no LinkedIn\n` +
+              `- Dados da empresa: headcount (número de funcionários), indústria, especialidades, descrição oficial, sede, ano de fundação, website\n` +
+              `Prefira estes dados aos snippets de busca em "DADOS DE FONTES EXTERNAS > LINKEDIN" sempre que houver conflito.`;
+            console.log(`[LinkedIn Deep] Built context with ${parts.length} sections (${linkedinDeepContext.length} chars)`);
+          }
+        }
+      } catch (err) {
+        console.warn("[LinkedIn Deep] Phase 3 error (non-fatal):", err);
+      }
+    }
+
     // Merge person-level results (LinkedIn/Instagram de pessoa) into context
     let personContext = "";
     if (externalPersonResults) {
@@ -1936,6 +2058,7 @@ ${ibgeContext ? `\n${ibgeContext}\n\nUse os dados do IBGE para fornecer "context
 ${googlePlacesContext ? `\n${googlePlacesContext}` : ""}
 ${seeklocContext ? `\n${seeklocContext}\n\nUse os dados do Seekloc como fonte secundária e altamente confiável para telefones, e-mails e endereços. Se houver divergência com a Receita Federal, mencione a existência de dados mais recentes no Seekloc.` : ""}
 ${personContext ? `\n${personContext}\n\nINSTRUÇÃO DE CRUZAMENTO — PERFIL DO CONTATO x EMPRESA:\nO perfil pessoal acima é de um decisor ou sócio da empresa analisada. Use esses dados para ENRIQUECER o dossiê da EMPRESA, não para fazer um dossiê da pessoa:\n- Use o cargo e empresa listados no LinkedIn para CONFIRMAR o porte e segmento da empresa.\n- Use o histórico profissional para entender o nível de maturidade e exigência da gestão (ex: sócio com passagem por grandes grupos = empresa bem estruturada).\n- Use menções a portfólio (ex: "gerenciamos 300 condomínios" no perfil) para estimar o volume da empresa.\n- Use o Instagram para capturar posicionamento de marca, estilo de comunicação, eventos, parcerias e sinais de crescimento da empresa.\n- Preencha socio_principal.linkedin com a URL real encontrada e socio_principal.historico_profissional com o que encontrou no perfil.\n- Preencha contatos_abordagem com a pessoa encontrada, incluindo canal preferencial baseado no perfil pessoal (ex: LinkedIn se for ativo lá).` : ""}
+${linkedinDeepContext}
 ${externalContext ? `\n${externalContext}\n\nUse os dados das fontes externas para enriquecer o dossiê. As fontes "protestos_negativacoes", "vagas_crescimento" e "tech_stack" são NOVAS — use-as para preencher risco_financeiro, sinais_crescimento e tecnologia_atual. AS FONTES "localizacao_contatos" e "grupo_economico" trazem dados de localização e outras empresas no endereço — use-as para cruzar com o endereço da Receita e preencher grupos_economicos. A FONTE "direct_contacts" traz links diretos do site da empresa — use-a para encontrar WhatsApp e e-mails oficiais.` : ""}
 ${domainContext ? `\n${domainContext}\n\nUse os dados de domínio/WHOIS para avaliar a presença digital da empresa. Domínios ativos com registrante correspondente ao CNPJ indicam boa presença online. Se houver CONTEÚDO DO SITE, analise-o profundamente para extrair: serviços oferecidos, portfólio de condomínios/imóveis, equipe, diferenciais, tecnologias usadas, e qualquer informação que enriqueça o dossiê e a abordagem comercial.` : ""}
 
