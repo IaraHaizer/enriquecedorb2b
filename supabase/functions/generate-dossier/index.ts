@@ -699,18 +699,21 @@ function formatSeeklocContext(data: any): string {
   const dtSituacao = fmtDate(p.dtsituacao);
   const dtObito = fmtDate(p.dtobito);
 
-  // Telefones
+  // Telefones — LIMITADO para não estourar contexto/tokens (empresas grandes podem ter 50+ números)
   const telefonesObj = p.telefones || {};
-  const fixos = Array.isArray(telefonesObj.fixo) ? telefonesObj.fixo : [];
-  const celulares = Array.isArray(telefonesObj.celulares) ? telefonesObj.celulares : [];
+  const fixos = (Array.isArray(telefonesObj.fixo) ? telefonesObj.fixo : []).slice(0, 3);
+  const celulares = (Array.isArray(telefonesObj.celulares) ? telefonesObj.celulares : []).slice(0, 8);
+  const totalFixos = telefonesObj.qtdefix ?? (Array.isArray(telefonesObj.fixo) ? telefonesObj.fixo.length : 0);
+  const totalCel = telefonesObj.qtdecel ?? (Array.isArray(telefonesObj.celulares) ? telefonesObj.celulares.length : 0);
   const phonesList: string[] = [];
   fixos.forEach((t: any) => phonesList.push(`(${t.ddd}) ${t.fone} [Fixo]`));
   celulares.forEach((t: any) => phonesList.push(`(${t.ddd}) ${t.fone} [Celular/WhatsApp]`));
 
-  // E-mails
+  // E-mails — limitado a 5
   const emailsRaw = p.emails || {};
-  const emailsArr = Array.isArray(emailsRaw) ? emailsRaw : (Array.isArray(emailsRaw.email) ? emailsRaw.email : []);
-  const emailsList = emailsArr.map((e: any) => (typeof e === "string" ? e : e.email)).filter(Boolean);
+  const emailsArrRaw = Array.isArray(emailsRaw) ? emailsRaw : (Array.isArray(emailsRaw.email) ? emailsRaw.email : []);
+  const emailsList = emailsArrRaw.map((e: any) => (typeof e === "string" ? e : e.email)).filter(Boolean).slice(0, 5);
+  const totalEmails = emailsRaw.qtde ?? emailsArrRaw.length;
 
   // Endereços
   const enderecosObj = p.enderecos || {};
