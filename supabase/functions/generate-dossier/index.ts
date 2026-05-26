@@ -1795,12 +1795,26 @@ serve(async (req) => {
 
     let googlePlacesContext = "";
     if (googlePlacesData && googlePlacesData.rating) {
+      const reviewsArr = (googlePlacesData.reviews as any[]) || [];
+      const reviewsBlock = reviewsArr.length > 0
+        ? `\n\nAVALIAÇÕES RECENTES (até 8 mais relevantes):\n` +
+          reviewsArr.map((r, i) =>
+            `[${i + 1}] ${r.nota ?? "?"}/5 — ${r.autor} (${r.data || "s/data"})\n"${r.texto}"`
+          ).join("\n\n")
+        : "\n\n(Sem textos de avaliações disponíveis)";
+
       googlePlacesContext = `\n=== AVALIAÇÕES DO GOOGLE (Google Places API) ===\n` +
         `Empresa encontrada: ${googlePlacesData.nome}\n` +
         `Nota (Rating): ${googlePlacesData.rating} / 5.0\n` +
         `Total de Avaliações: ${googlePlacesData.user_ratings_total}\n` +
-        `Endereço no Google: ${googlePlacesData.endereco}\n` +
-        `\nINSTRUÇÃO: Use esta nota do Google para compor a "reputacao" da empresa e para ajustar o nível de risco ou argumentos de venda.\n` +
+        `Endereço no Google: ${googlePlacesData.endereco}` +
+        reviewsBlock +
+        `\n\nINSTRUÇÕES OBRIGATÓRIAS DE ANÁLISE DAS AVALIAÇÕES:\n` +
+        `1. Leia TODAS as avaliações acima (principalmente as negativas, 1-3 estrelas) e extraia DORES RECORRENTES dos clientes (ex.: "boleto sempre atrasa", "demora no registro", "atendimento ruim", "falta de comunicação", "taxas abusivas", "portaria ineficiente", "manutenção lenta", "síndico ausente", etc.).\n` +
+        `2. Preencha o campo "reputacao" com a nota + número de avaliações + um resumo das 2-3 dores principais identificadas. Exemplo: "Google Maps: 3.2 (148 avaliações). Reclamações recorrentes: atraso recorrente na emissão de boletos, demora no registro de pagamentos, dificuldade de contato com a administração."\n` +
+        `3. Use essas dores para personalizar os campos "analise_fit", "gancho_venda" e "abordagem_estrategica" — conectando explicitamente como os produtos Group Software / PartnerBank resolvem CADA dor encontrada (ex.: dor "boleto atrasa" → módulo de cobrança automatizada / PartnerBank; dor "falta de comunicação" → app do morador / portal de comunicação).\n` +
+        `4. Em "contatos_abordagem" ou em um campo "pontos_de_dor", liste as dores reais extraídas das avaliações como BULLETS curtos para o vendedor "tocar" no contato.\n` +
+        `5. Se as avaliações forem majoritariamente positivas (4.5+), destaque isso como sinal de empresa madura e ajuste o discurso para upgrade/eficiência ao invés de resolução de crise.\n` +
         `=== FIM GOOGLE PLACES ===`;
     }
 
