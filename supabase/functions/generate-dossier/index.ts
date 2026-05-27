@@ -398,7 +398,7 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
     if (r.url) {
       try {
         const urlDomain = new URL(r.url).hostname.replace(/^www\./, "");
-        if (!isGenericDomain(urlDomain) && !urlDomain.match(/facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|registro\.br|linktr/)) {
+        if (!isGenericDomain(urlDomain) && !urlDomain.match(/facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|registro\.br|linktr|news|gazeta|folha|estadao|globo|uol|terra|metropoles|noticias?|jornal|portal|wikipedia|\.gov\.|\.edu\.|tribunal|tjsp|tjmg|tjpr|trf/)) {
           extraDomains.add(urlDomain);
         }
       } catch { /* ignore */ }
