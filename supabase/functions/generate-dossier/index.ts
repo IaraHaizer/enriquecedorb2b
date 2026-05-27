@@ -2940,6 +2940,7 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
           cache_hits: telemetryCounter.cacheHits,
           live_scrapes: telemetryCounter.scrapes,
         },
+        portfolio_debug: portfolioTelemetry,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
