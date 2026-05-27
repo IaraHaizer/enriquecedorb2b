@@ -2872,11 +2872,13 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
     // Inject domain data directly into dossier (not AI-generated)
     dossier.dominios_associados = domainData.dominios;
 
-    // Fase D: injeta portfolio_intel + stack_detectada no dossier (não-IA, raw)
+    // Fase D: injeta portfolio_intel + stack_detectada + telemetria no dossier (não-IA, raw)
     if (portfolioIntel) dossier.portfolio_intel = portfolioIntel;
     if (stackDetection && (stackDetection.sistema_gestao || stackDetection.crm_marketing.length || stackDetection.analytics.length || stackDetection.app_morador.length)) {
       dossier.stack_detectada = stackDetection;
     }
+    // D.5: persiste telemetria de validação de domínio (auditável via DB)
+    dossier.portfolio_debug = portfolioTelemetry;
 
     // Inject IBGE raw data into insights
     if (ibgeData) {
