@@ -2180,6 +2180,102 @@ serve(async (req) => {
       await Promise.all(phase2Promises);
     }
 
+    // === PHASE 2.5: PORTFOLIO INTEL — Fase D (map + stack + IA + munição comercial) ===
+    let portfolioContext = "";
+    let portfolioIntel: PortfolioIntel | null = null;
+    let stackDetection: StackDetection | null = null;
+    const portfolioTelemetry = { mapped_urls: 0, scraped_pages: 0, cache_hits: 0, scrapes: 0, has_ai_extraction: false };
+
+    if (mainDomain && !isFastMode) {
+      try {
+        const brandForPortfolio = cleanCompanyNameForSearch(nomeFantasia || empresaNome).trim() || empresaNome;
+        const baseUrl = `https://${mainDomain}`;
+
+        // D1: descobrir URLs relevantes (portfolio, condominios, clientes, sobre)
+        const mappedRaw = await firecrawlMap(baseUrl, "condomínio empreendimento cliente portfólio sobre", 60);
+        portfolioTelemetry.mapped_urls = mappedRaw.length;
+
+        // Filtra URLs candidatas a "portfólio / institucional"
+        const portfolioKeywords = /(portfolio|portif[óo]lio|condom[ií]nios|empreendiment|clientes|cases|sobre|institucional|quem-somos|servi[çc]os|administra[çc][ãa]o)/i;
+        const skipKeywords = /(politica|privacidade|cookies|termos|login|admin|wp-admin|wp-content|feed|sitemap\.xml|\.pdf$|\.jpg$|\.png$)/i;
+
+        const candidates = Array.from(new Set([
+          baseUrl, // sempre incluir home
+          ...mappedRaw.filter((u) => portfolioKeywords.test(u) && !skipKeywords.test(u)),
+        ])).slice(0, 7);
+
+        const cacheTele = { cacheHits: 0, scrapes: 0 };
+        const scrapeResults = await Promise.all(
+          candidates.map((u) => cachedSiteScrape(u, "portfolio_page", cacheTele).then((r) => ({ url: u, ...r })))
+        );
+        portfolioTelemetry.cache_hits = cacheTele.cacheHits;
+        portfolioTelemetry.scrapes = cacheTele.scrapes;
+        portfolioTelemetry.scraped_pages = scrapeResults.filter((r) => r.markdown.length > 100 || r.html.length > 500).length;
+
+        // D2: detectar stack a partir do HTML+markdown concatenados de TODAS as páginas
+        const allHtml = scrapeResults.map((r) => r.html).join("\n").slice(0, 200000);
+        const allMd = scrapeResults.map((r) => r.markdown).join("\n").slice(0, 200000);
+        stackDetection = detectStackFromText(allHtml + "\n" + allMd);
+
+        // D3: IA extrai portfólio estruturado a partir do markdown consolidado
+        const portfolioMd = scrapeResults
+          .filter((r) => r.markdown.length > 100)
+          .map((r) => `### URL: ${r.url}\n${r.markdown.slice(0, 4000)}`)
+          .join("\n\n---\n\n");
+
+        if (portfolioMd.length > 300) {
+          portfolioIntel = await extractPortfolioWithAI(
+            portfolioMd,
+            brandForPortfolio,
+            (cnpjDataRef?.municipio as string) || null,
+            (cnpjDataRef?.uf as string) || null
+          );
+          portfolioTelemetry.has_ai_extraction = !!portfolioIntel;
+        }
+
+        // Monta contexto pra IA principal (D4)
+        const blocks: string[] = [];
+        if (portfolioIntel) {
+          blocks.push(`--- PORTFÓLIO INFERIDO (IA, confiança: ${portfolioIntel.confianca}) ---
+- Total condomínios estimado: ${portfolioIntel.total_condominios_estimado ?? "não declarado"}
+- Tipologia predominante: ${portfolioIntel.tipologia_predominante ?? "não identificado"}
+- Bairros atendidos: ${portfolioIntel.bairros_atendidos.join(", ") || "não declarado"}
+- Cidades atendidas: ${portfolioIntel.cidades_atendidas.join(", ") || "não declarado"}
+- Ticket médio estimado por cota: ${portfolioIntel.ticket_medio_estimado_cota ?? "não estimável"}
+- Diferenciais declarados: ${portfolioIntel.diferenciais_declarados.join(" | ") || "—"}
+- Evidências literais do site:
+${portfolioIntel.evidencias.map((e) => `  • "${e}"`).join("\n") || "  (nenhuma)"}`);
+        }
+        if (stackDetection && (stackDetection.sistema_gestao || stackDetection.crm_marketing.length || stackDetection.analytics.length || stackDetection.app_morador.length)) {
+          blocks.push(`--- STACK DETECTADA NO SITE (regex sobre HTML/JS) ---
+- Sistema de gestão (concorrente): ${stackDetection.sistema_gestao ? `${stackDetection.sistema_gestao.nome} [evidências: ${stackDetection.sistema_gestao.evidencias.join(" | ")}]` : "não detectado"}
+${stackDetection.outros_sistemas_gestao.length ? `- Outros sistemas mencionados: ${stackDetection.outros_sistemas_gestao.join(", ")}` : ""}
+- App do morador: ${stackDetection.app_morador.join(", ") || "não detectado"}
+- CRM/Marketing: ${stackDetection.crm_marketing.join(", ") || "não detectado"}
+- Analytics/Tracking: ${stackDetection.analytics.join(", ") || "não detectado"}`);
+        }
+
+        if (blocks.length > 0) {
+          portfolioContext =
+            `\n=== INTELIGÊNCIA DE PORTFÓLIO E STACK (Fase D — extraído do site oficial ${mainDomain}) ===\n` +
+            blocks.join("\n\n") +
+            `\n=== FIM PORTFOLIO INTEL ===\n\n` +
+            `INSTRUÇÃO CRÍTICA (Fase D — munição comercial):\n` +
+            `1. Em "empresa.tecnologia_atual": se "Sistema de gestão (concorrente)" foi detectado, ESCREVA o nome literal (ex.: "Usa Superlógica — evidência no site"). NÃO escreva "Não identificado" quando houver evidência.\n` +
+            `2. Em "abordagem_estrategica" e "gancho_venda": CITE LITERALMENTE pelo menos 1 bairro/cidade do portfólio, 1 diferencial declarado, e o sistema concorrente detectado (se houver). Ex.: "Você administra ~120 condomínios em Belvedere e Lourdes e usa Superlógica hoje — o módulo X da Group resolve o gargalo de boletos que mencionam 'cobrança rápida' como diferencial".\n` +
+            `3. Se "ticket_medio_estimado_cota" estiver preenchido, use-o em "insights_estrategicos.contexto_regional" e ajuste o porte da oferta.\n` +
+            `4. Se houver concorrente detectado, oriente "abordagem_estrategica" como SWITCH (não greenfield): "Migração de [concorrente] → Group: ganho de Y".\n` +
+            `5. Se NÃO houver concorrente detectado mas SIM sinais de gestão (vagas, posts), trate como oportunidade greenfield.\n` +
+            `6. NÃO INVENTE bairros, números ou sistemas. Use APENAS o que está nesses blocos.`;
+          console.log(`[Portfolio Intel] Built context (${portfolioContext.length} chars). Stack: ${stackDetection?.sistema_gestao?.nome || "—"}. AI extraction: ${portfolioTelemetry.has_ai_extraction}`);
+        }
+      } catch (err) {
+        console.warn("[Portfolio Intel] Phase 2.5 error (non-fatal):", err);
+      }
+    }
+
+
+
     // === PHASE 3: LINKEDIN DEEP SCRAPE (Fase A + C: cache, dedup, confiança) ===
     let linkedinDeepContext = "";
     // Telemetria compartilhada entre Phase 3 e 3.5
