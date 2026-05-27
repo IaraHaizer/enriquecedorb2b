@@ -390,7 +390,7 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
     while ((match = domainRegex.exec(text)) !== null) {
       const d = match[1].toLowerCase();
       // FILTRO RIGOROSO: Nunca aceitar domínios de provedores ou redes sociais como domínios "associados" da empresa
-      if (!isGenericDomain(d) && !d.match(/registro\.br|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|linktr/)) {
+      if (!isGenericDomain(d) && !d.match(/registro\.br|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|linktr|news|gazeta|folha|estadao|globo|uol|terra|metropoles|noticias?|jornal|portal|wikipedia|\.gov\.|\.edu\.|tribunal|tjsp|tjmg|tjpr|trf/)) {
         extraDomains.add(d);
       }
     }
