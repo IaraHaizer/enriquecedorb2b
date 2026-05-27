@@ -390,7 +390,7 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
     while ((match = domainRegex.exec(text)) !== null) {
       const d = match[1].toLowerCase();
       // FILTRO RIGOROSO: Nunca aceitar domínios de provedores ou redes sociais como domínios "associados" da empresa
-      if (!isGenericDomain(d) && !d.match(/registro\.br|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|linktr/)) {
+      if (!isGenericDomain(d) && !d.match(/registro\.br|facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|linktr|news|gazeta|folha|estadao|globo|uol|terra|metropoles|noticias?|jornal|portal|wikipedia|\.gov\.|\.edu\.|tribunal|tjsp|tjmg|tjpr|trf/)) {
         extraDomains.add(d);
       }
     }
@@ -398,7 +398,7 @@ async function fetchDomainInfo(empresaNome: string, cnpj: string | null, cnpjDat
     if (r.url) {
       try {
         const urlDomain = new URL(r.url).hostname.replace(/^www\./, "");
-        if (!isGenericDomain(urlDomain) && !urlDomain.match(/facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|registro\.br|linktr/)) {
+        if (!isGenericDomain(urlDomain) && !urlDomain.match(/facebook|instagram|linkedin|twitter|youtube|whois|jusbrasil|reclame|registro\.br|linktr|news|gazeta|folha|estadao|globo|uol|terra|metropoles|noticias?|jornal|portal|wikipedia|\.gov\.|\.edu\.|tribunal|tjsp|tjmg|tjpr|trf/)) {
           extraDomains.add(urlDomain);
         }
       } catch { /* ignore */ }
@@ -2180,63 +2180,121 @@ serve(async (req) => {
       await Promise.all(phase2Promises);
     }
 
-    // === PHASE 2.5: PORTFOLIO INTEL — Fase D (map + stack + IA + munição comercial) ===
+    // === PHASE 2.5: PORTFOLIO INTEL — Fase D + D.5 (validação de domínio + map + stack + IA) ===
     let portfolioContext = "";
     let portfolioIntel: PortfolioIntel | null = null;
     let stackDetection: StackDetection | null = null;
-    const portfolioTelemetry = { mapped_urls: 0, scraped_pages: 0, cache_hits: 0, scrapes: 0, has_ai_extraction: false };
+    const portfolioTelemetry: Record<string, unknown> = {
+      domain_used: mainDomain || null,
+      validated: false,
+      skipped_reason: null,
+      validation_signals: null,
+      mapped_urls: 0,
+      scraped_pages: 0,
+      cache_hits: 0,
+      scrapes: 0,
+      has_ai_extraction: false,
+    };
 
-    if (mainDomain && !isFastMode) {
+    if (!mainDomain) {
+      portfolioTelemetry.skipped_reason = "sem_dominio_identificado";
+    } else if (isFastMode) {
+      portfolioTelemetry.skipped_reason = "fast_mode";
+    } else {
       try {
         const brandForPortfolio = cleanCompanyNameForSearch(nomeFantasia || empresaNome).trim() || empresaNome;
         const baseUrl = `https://${mainDomain}`;
-
-        // D1: descobrir URLs relevantes (portfolio, condominios, clientes, sobre)
-        const mappedRaw = await firecrawlMap(baseUrl, "condomínio empreendimento cliente portfólio sobre", 60);
-        portfolioTelemetry.mapped_urls = mappedRaw.length;
-
-        // Filtra URLs candidatas a "portfólio / institucional"
-        const portfolioKeywords = /(portfolio|portif[óo]lio|condom[ií]nios|empreendiment|clientes|cases|sobre|institucional|quem-somos|servi[çc]os|administra[çc][ãa]o)/i;
-        const skipKeywords = /(politica|privacidade|cookies|termos|login|admin|wp-admin|wp-content|feed|sitemap\.xml|\.pdf$|\.jpg$|\.png$)/i;
-
-        const candidates = Array.from(new Set([
-          baseUrl, // sempre incluir home
-          ...mappedRaw.filter((u) => portfolioKeywords.test(u) && !skipKeywords.test(u)),
-        ])).slice(0, 7);
-
         const cacheTele = { cacheHits: 0, scrapes: 0 };
-        const scrapeResults = await Promise.all(
-          candidates.map((u) => cachedSiteScrape(u, "portfolio_page", cacheTele).then((r) => ({ url: u, ...r })))
-        );
+
+        // === D.5: VALIDAÇÃO DE DOMÍNIO (impede gastar IA num site que não é da empresa) ===
+        const homeScrape = await cachedSiteScrape(baseUrl, "portfolio_page", cacheTele);
+        const homeText = `${homeScrape.markdown} ${homeScrape.html}`.toLowerCase();
+        const cleanCnpjDigits = (cnpj || "").replace(/\D/g, "");
+        const cnpjFormatted = cleanCnpjDigits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+        const cidadeRaw = ((cnpjDataRef?.municipio as string) || "").toLowerCase().trim();
+        const segmentoKeywords = ["condom", "síndic", "sindic", "administra", "imobili", "incorpora", "construt", "engenhar", "contabil", "consult", "segur", "tecnolog"];
+        const blacklistHostPatterns = /(^|\.)(news|gazeta|folha|estadao|globo|uol|terra|r7|ig|abril|veja|exame|metropoles|cnn|band|sbt|record|noticias?|jornal|portal|tribunal|tjsp|tjmg|tjpr|stf|stj|trf|wikipedia|jusbrasil)([.\-]|$)|(\.gov\.br|\.gov$|\.edu\.br|\.edu$|\.mil\.br|registro\.br|whois)/i;
+
+        const sigWords = empresaNome.toLowerCase()
+          .replace(/[^a-z\s]/g, "")
+          .split(/\s+/)
+          .filter((w) => w.length >= 4 && !["ltda", "limitada", "administradora", "gestao", "servicos", "empresa", "comercio", "industria"].includes(w));
+
+        const signals = {
+          cnpj_match: !!cleanCnpjDigits && (homeText.includes(cleanCnpjDigits) || homeText.includes(cnpjFormatted.toLowerCase())),
+          cidade_match: cidadeRaw.length >= 4 ? homeText.includes(cidadeRaw) : false,
+          segmento_hits: segmentoKeywords.filter((k) => homeText.includes(k)).length,
+          brand_match: sigWords.some((w) => homeText.includes(w)),
+          home_length: homeScrape.markdown.length,
+          blacklisted_host: blacklistHostPatterns.test(mainDomain),
+        };
+        portfolioTelemetry.validation_signals = signals;
         portfolioTelemetry.cache_hits = cacheTele.cacheHits;
         portfolioTelemetry.scrapes = cacheTele.scrapes;
-        portfolioTelemetry.scraped_pages = scrapeResults.filter((r) => r.markdown.length > 100 || r.html.length > 500).length;
 
-        // D2: detectar stack a partir do HTML+markdown concatenados de TODAS as páginas
-        const allHtml = scrapeResults.map((r) => r.html).join("\n").slice(0, 200000);
-        const allMd = scrapeResults.map((r) => r.markdown).join("\n").slice(0, 200000);
-        stackDetection = detectStackFromText(allHtml + "\n" + allMd);
-
-        // D3: IA extrai portfólio estruturado a partir do markdown consolidado
-        const portfolioMd = scrapeResults
-          .filter((r) => r.markdown.length > 100)
-          .map((r) => `### URL: ${r.url}\n${r.markdown.slice(0, 4000)}`)
-          .join("\n\n---\n\n");
-
-        if (portfolioMd.length > 300) {
-          portfolioIntel = await extractPortfolioWithAI(
-            portfolioMd,
-            brandForPortfolio,
-            (cnpjDataRef?.municipio as string) || null,
-            (cnpjDataRef?.uf as string) || null
+        const isValid =
+          !signals.blacklisted_host &&
+          homeScrape.markdown.length > 200 &&
+          (
+            signals.cnpj_match ||
+            (signals.cidade_match && signals.segmento_hits >= 1 && signals.brand_match) ||
+            (signals.segmento_hits >= 2 && signals.brand_match)
           );
-          portfolioTelemetry.has_ai_extraction = !!portfolioIntel;
-        }
 
-        // Monta contexto pra IA principal (D4)
-        const blocks: string[] = [];
-        if (portfolioIntel) {
-          blocks.push(`--- PORTFÓLIO INFERIDO (IA, confiança: ${portfolioIntel.confianca}) ---
+        if (!isValid) {
+          portfolioTelemetry.skipped_reason = signals.blacklisted_host
+            ? "dominio_blacklisted_news_gov"
+            : homeScrape.markdown.length <= 200
+            ? "home_vazia_ou_inacessivel"
+            : "site_oficial_nao_confirmado";
+          console.warn(`[Portfolio Intel] Skipping ${mainDomain}: ${portfolioTelemetry.skipped_reason} | signals=${JSON.stringify(signals)}`);
+        } else {
+          portfolioTelemetry.validated = true;
+
+          // D1: descobrir URLs relevantes
+          const mappedRaw = await firecrawlMap(baseUrl, "condomínio empreendimento cliente portfólio sobre", 60);
+          portfolioTelemetry.mapped_urls = mappedRaw.length;
+
+          const portfolioKeywords = /(portfolio|portif[óo]lio|condom[ií]nios|empreendiment|clientes|cases|sobre|institucional|quem-somos|servi[çc]os|administra[çc][ãa]o)/i;
+          const skipKeywords = /(politica|privacidade|cookies|termos|login|admin|wp-admin|wp-content|feed|sitemap\.xml|\.pdf$|\.jpg$|\.png$)/i;
+
+          const extraCandidates = Array.from(new Set(
+            mappedRaw.filter((u) => portfolioKeywords.test(u) && !skipKeywords.test(u) && u !== baseUrl)
+          )).slice(0, 6);
+
+          const extraScrapes = await Promise.all(
+            extraCandidates.map((u) => cachedSiteScrape(u, "portfolio_page", cacheTele).then((r) => ({ url: u, ...r })))
+          );
+          const scrapeResults = [{ url: baseUrl, ...homeScrape }, ...extraScrapes];
+          portfolioTelemetry.cache_hits = cacheTele.cacheHits;
+          portfolioTelemetry.scrapes = cacheTele.scrapes;
+          portfolioTelemetry.scraped_pages = scrapeResults.filter((r) => r.markdown.length > 100 || r.html.length > 500).length;
+
+          // D2: detectar stack
+          const allHtml = scrapeResults.map((r) => r.html).join("\n").slice(0, 200000);
+          const allMd = scrapeResults.map((r) => r.markdown).join("\n").slice(0, 200000);
+          stackDetection = detectStackFromText(allHtml + "\n" + allMd);
+
+          // D3: IA extrai portfólio estruturado
+          const portfolioMd = scrapeResults
+            .filter((r) => r.markdown.length > 100)
+            .map((r) => `### URL: ${r.url}\n${r.markdown.slice(0, 4000)}`)
+            .join("\n\n---\n\n");
+
+          if (portfolioMd.length > 300) {
+            portfolioIntel = await extractPortfolioWithAI(
+              portfolioMd,
+              brandForPortfolio,
+              (cnpjDataRef?.municipio as string) || null,
+              (cnpjDataRef?.uf as string) || null
+            );
+            portfolioTelemetry.has_ai_extraction = !!portfolioIntel;
+          }
+
+          // D4: contexto pra IA principal
+          const blocks: string[] = [];
+          if (portfolioIntel) {
+            blocks.push(`--- PORTFÓLIO INFERIDO (IA, confiança: ${portfolioIntel.confianca}) ---
 - Total condomínios estimado: ${portfolioIntel.total_condominios_estimado ?? "não declarado"}
 - Tipologia predominante: ${portfolioIntel.tipologia_predominante ?? "não identificado"}
 - Bairros atendidos: ${portfolioIntel.bairros_atendidos.join(", ") || "não declarado"}
@@ -2245,32 +2303,34 @@ serve(async (req) => {
 - Diferenciais declarados: ${portfolioIntel.diferenciais_declarados.join(" | ") || "—"}
 - Evidências literais do site:
 ${portfolioIntel.evidencias.map((e) => `  • "${e}"`).join("\n") || "  (nenhuma)"}`);
-        }
-        if (stackDetection && (stackDetection.sistema_gestao || stackDetection.crm_marketing.length || stackDetection.analytics.length || stackDetection.app_morador.length)) {
-          blocks.push(`--- STACK DETECTADA NO SITE (regex sobre HTML/JS) ---
+          }
+          if (stackDetection && (stackDetection.sistema_gestao || stackDetection.crm_marketing.length || stackDetection.analytics.length || stackDetection.app_morador.length)) {
+            blocks.push(`--- STACK DETECTADA NO SITE (regex sobre HTML/JS) ---
 - Sistema de gestão (concorrente): ${stackDetection.sistema_gestao ? `${stackDetection.sistema_gestao.nome} [evidências: ${stackDetection.sistema_gestao.evidencias.join(" | ")}]` : "não detectado"}
 ${stackDetection.outros_sistemas_gestao.length ? `- Outros sistemas mencionados: ${stackDetection.outros_sistemas_gestao.join(", ")}` : ""}
 - App do morador: ${stackDetection.app_morador.join(", ") || "não detectado"}
 - CRM/Marketing: ${stackDetection.crm_marketing.join(", ") || "não detectado"}
 - Analytics/Tracking: ${stackDetection.analytics.join(", ") || "não detectado"}`);
-        }
+          }
 
-        if (blocks.length > 0) {
-          portfolioContext =
-            `\n=== INTELIGÊNCIA DE PORTFÓLIO E STACK (Fase D — extraído do site oficial ${mainDomain}) ===\n` +
-            blocks.join("\n\n") +
-            `\n=== FIM PORTFOLIO INTEL ===\n\n` +
-            `INSTRUÇÃO CRÍTICA (Fase D — munição comercial):\n` +
-            `1. Em "empresa.tecnologia_atual": se "Sistema de gestão (concorrente)" foi detectado, ESCREVA o nome literal (ex.: "Usa Superlógica — evidência no site"). NÃO escreva "Não identificado" quando houver evidência.\n` +
-            `2. Em "abordagem_estrategica" e "gancho_venda": CITE LITERALMENTE pelo menos 1 bairro/cidade do portfólio, 1 diferencial declarado, e o sistema concorrente detectado (se houver). Ex.: "Você administra ~120 condomínios em Belvedere e Lourdes e usa Superlógica hoje — o módulo X da Group resolve o gargalo de boletos que mencionam 'cobrança rápida' como diferencial".\n` +
-            `3. Se "ticket_medio_estimado_cota" estiver preenchido, use-o em "insights_estrategicos.contexto_regional" e ajuste o porte da oferta.\n` +
-            `4. Se houver concorrente detectado, oriente "abordagem_estrategica" como SWITCH (não greenfield): "Migração de [concorrente] → Group: ganho de Y".\n` +
-            `5. Se NÃO houver concorrente detectado mas SIM sinais de gestão (vagas, posts), trate como oportunidade greenfield.\n` +
-            `6. NÃO INVENTE bairros, números ou sistemas. Use APENAS o que está nesses blocos.`;
-          console.log(`[Portfolio Intel] Built context (${portfolioContext.length} chars). Stack: ${stackDetection?.sistema_gestao?.nome || "—"}. AI extraction: ${portfolioTelemetry.has_ai_extraction}`);
+          if (blocks.length > 0) {
+            portfolioContext =
+              `\n=== INTELIGÊNCIA DE PORTFÓLIO E STACK (Fase D — extraído do site oficial ${mainDomain}) ===\n` +
+              blocks.join("\n\n") +
+              `\n=== FIM PORTFOLIO INTEL ===\n\n` +
+              `INSTRUÇÃO CRÍTICA (Fase D — munição comercial):\n` +
+              `1. Em "empresa.tecnologia_atual": se "Sistema de gestão (concorrente)" foi detectado, ESCREVA o nome literal (ex.: "Usa Superlógica — evidência no site"). NÃO escreva "Não identificado" quando houver evidência.\n` +
+              `2. Em "abordagem_estrategica" e "gancho_venda": CITE LITERALMENTE pelo menos 1 bairro/cidade do portfólio, 1 diferencial declarado, e o sistema concorrente detectado (se houver).\n` +
+              `3. Se "ticket_medio_estimado_cota" estiver preenchido, use-o em "insights_estrategicos.contexto_regional".\n` +
+              `4. Se houver concorrente detectado, oriente "abordagem_estrategica" como SWITCH (não greenfield).\n` +
+              `5. Se NÃO houver concorrente detectado mas SIM sinais de gestão (vagas, posts), trate como greenfield.\n` +
+              `6. NÃO INVENTE bairros, números ou sistemas. Use APENAS o que está nesses blocos.`;
+            console.log(`[Portfolio Intel] Built context (${portfolioContext.length} chars). Stack: ${stackDetection?.sistema_gestao?.nome || "—"}. AI extraction: ${portfolioTelemetry.has_ai_extraction}`);
+          }
         }
       } catch (err) {
         console.warn("[Portfolio Intel] Phase 2.5 error (non-fatal):", err);
+        portfolioTelemetry.skipped_reason = "erro_runtime";
       }
     }
 
@@ -2812,11 +2872,13 @@ Analise profundamente e retorne o JSON estruturado conforme o formato especifica
     // Inject domain data directly into dossier (not AI-generated)
     dossier.dominios_associados = domainData.dominios;
 
-    // Fase D: injeta portfolio_intel + stack_detectada no dossier (não-IA, raw)
+    // Fase D: injeta portfolio_intel + stack_detectada + telemetria no dossier (não-IA, raw)
     if (portfolioIntel) dossier.portfolio_intel = portfolioIntel;
     if (stackDetection && (stackDetection.sistema_gestao || stackDetection.crm_marketing.length || stackDetection.analytics.length || stackDetection.app_morador.length)) {
       dossier.stack_detectada = stackDetection;
     }
+    // D.5: persiste telemetria de validação de domínio (auditável via DB)
+    dossier.portfolio_debug = portfolioTelemetry;
 
     // Inject IBGE raw data into insights
     if (ibgeData) {
