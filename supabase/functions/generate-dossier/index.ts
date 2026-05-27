@@ -551,6 +551,216 @@ async function firecrawlScrape(url: string, sourceName: string): Promise<string>
   }
 }
 
+// ============= FASE D: PORTFOLIO INTEL (map + scrape + stack detection + IA) =============
+
+// D1: Firecrawl /map para descobrir URLs relevantes do site institucional
+async function firecrawlMap(url: string, search: string | undefined, limit: number): Promise<string[]> {
+  const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!apiKey) return [];
+  try {
+    console.log(`[Firecrawl Map] ${url} search="${search || ""}" limit=${limit}`);
+    const response = await fetch("https://api.firecrawl.dev/v1/map", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url, search, limit, ignoreSitemap: false }),
+    });
+    if (!response.ok) {
+      console.warn(`[Firecrawl Map] HTTP ${response.status}`);
+      return [];
+    }
+    const data = await response.json();
+    const links: string[] = Array.isArray(data?.links) ? data.links : (Array.isArray(data?.data?.links) ? data.data.links : []);
+    return links.filter((l) => typeof l === "string");
+  } catch (err) {
+    console.warn(`[Firecrawl Map] error:`, err);
+    return [];
+  }
+}
+
+// D2: Regex de detecção de stack concorrente / maturidade digital
+// Cada assinatura é uma evidência. Múltiplas evidências aumentam confiança.
+interface StackDetection {
+  sistema_gestao: { nome: string; evidencias: string[] } | null;
+  outros_sistemas_gestao: string[]; // concorrentes secundários detectados
+  crm_marketing: string[];
+  analytics: string[];
+  app_morador: string[];
+  evidencias_raw: string[];
+}
+
+const STACK_SIGNATURES: Array<{ key: string; nome: string; categoria: "gestao" | "crm" | "analytics" | "app"; patterns: RegExp[] }> = [
+  // === ERPs de condomínio (concorrentes diretos da Group Software) ===
+  { key: "superlogica", nome: "Superlógica", categoria: "gestao", patterns: [/superl[óo]gica/i, /superlogica\.(com|net)/i, /portal\.superlogica/i] },
+  { key: "townsq", nome: "TownSq", categoria: "app", patterns: [/townsq/i, /townsq\.com\.br/i] },
+  { key: "group_software", nome: "Group Software", categoria: "gestao", patterns: [/group\s*software/i, /groupsoftware\.com/i, /\bgrupo group\b/i] },
+  { key: "condofy", nome: "Condofy", categoria: "gestao", patterns: [/condofy/i] },
+  { key: "ucondo", nome: "uCondo", categoria: "gestao", patterns: [/\bu[\s\-]?condo\b/i, /ucondo\.com/i] },
+  { key: "condomob", nome: "Condomob", categoria: "app", patterns: [/condomob/i] },
+  { key: "kennec", nome: "Kennec", categoria: "gestao", patterns: [/kennec/i] },
+  { key: "mycond", nome: "MyCond", categoria: "gestao", patterns: [/mycond/i, /my[\s\-]?cond/i] },
+  { key: "uau", nome: "UAU Sistemas", categoria: "gestao", patterns: [/\buau\s*sistemas?\b/i, /globaltec/i] },
+  // === CRM / Marketing ===
+  { key: "rdstation", nome: "RD Station", categoria: "crm", patterns: [/rdstation/i, /rd\.station/i, /d335\.com/i] },
+  { key: "pipedrive", nome: "Pipedrive", categoria: "crm", patterns: [/pipedrive/i] },
+  { key: "hubspot", nome: "HubSpot", categoria: "crm", patterns: [/hubspot/i, /hs-scripts\.com/i] },
+  { key: "activecampaign", nome: "ActiveCampaign", categoria: "crm", patterns: [/activecampaign/i] },
+  // === Analytics / Tag Managers ===
+  { key: "gtag", nome: "Google Analytics / GA4", categoria: "analytics", patterns: [/gtag\.js/i, /google-analytics\.com/i, /googletagmanager\.com/i, /gtag\(/i] },
+  { key: "meta_pixel", nome: "Meta Pixel (Facebook)", categoria: "analytics", patterns: [/fbq\(/i, /connect\.facebook\.net.*fbevents/i] },
+  { key: "hotjar", nome: "Hotjar", categoria: "analytics", patterns: [/hotjar/i, /static\.hotjar\.com/i] },
+  { key: "clarity", nome: "Microsoft Clarity", categoria: "analytics", patterns: [/clarity\.ms/i, /clarity\.start/i] },
+  { key: "tawk", nome: "Tawk.to (chat)", categoria: "crm", patterns: [/tawk\.to/i] },
+  { key: "zendesk", nome: "Zendesk", categoria: "crm", patterns: [/zendesk\.com/i, /zdassets\.com/i] },
+];
+
+function detectStackFromText(raw: string): StackDetection {
+  const result: StackDetection = {
+    sistema_gestao: null,
+    outros_sistemas_gestao: [],
+    crm_marketing: [],
+    analytics: [],
+    app_morador: [],
+    evidencias_raw: [],
+  };
+  if (!raw) return result;
+  const text = raw.slice(0, 200000); // cap defensivo
+  const hits: Array<{ key: string; nome: string; categoria: string; evidence: string }> = [];
+  for (const sig of STACK_SIGNATURES) {
+    for (const pat of sig.patterns) {
+      const m = text.match(pat);
+      if (m) {
+        hits.push({ key: sig.key, nome: sig.nome, categoria: sig.categoria, evidence: m[0].slice(0, 80) });
+        result.evidencias_raw.push(`${sig.nome}: "${m[0].slice(0, 80)}"`);
+        break;
+      }
+    }
+  }
+  const gestaoHits = hits.filter((h) => h.categoria === "gestao");
+  const appHits = hits.filter((h) => h.categoria === "app");
+  if (gestaoHits.length > 0) {
+    result.sistema_gestao = { nome: gestaoHits[0].nome, evidencias: gestaoHits.slice(0, 3).map((h) => h.evidence) };
+    result.outros_sistemas_gestao = gestaoHits.slice(1).map((h) => h.nome);
+  }
+  result.app_morador = Array.from(new Set(appHits.map((h) => h.nome)));
+  result.crm_marketing = Array.from(new Set(hits.filter((h) => h.categoria === "crm").map((h) => h.nome)));
+  result.analytics = Array.from(new Set(hits.filter((h) => h.categoria === "analytics").map((h) => h.nome)));
+  return result;
+}
+
+// Wrapper: scrape com cache (reaproveita firecrawl_cache de 7d para páginas de portfólio)
+async function cachedSiteScrape(url: string, sourceName: string, telemetry: { cacheHits: number; scrapes: number }): Promise<{ markdown: string; html: string }> {
+  const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!apiKey) return { markdown: "", html: "" };
+  try {
+    const sb = getSupabaseAdmin();
+    const cacheKey = `site_scrape:${url.toLowerCase()}`;
+    const { data: cached } = await sb
+      .from("firecrawl_cache")
+      .select("results, expires_at")
+      .eq("cache_key", cacheKey)
+      .maybeSingle();
+    if (cached && cached.expires_at && new Date(cached.expires_at) > new Date()) {
+      telemetry.cacheHits++;
+      const r = cached.results as Record<string, string>;
+      return { markdown: r?.markdown || "", html: r?.html || "" };
+    }
+    const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url, formats: ["markdown", "html"], onlyMainContent: false, timeout: 15000 }),
+    });
+    telemetry.scrapes++;
+    if (!response.ok) return { markdown: "", html: "" };
+    const data = await response.json();
+    const md = data?.data?.markdown || data?.markdown || "";
+    const html = data?.data?.html || data?.html || "";
+    if (md.length > 100 || html.length > 500) {
+      await sb.from("firecrawl_cache").upsert({
+        cache_key: cacheKey,
+        source_name: sourceName,
+        query: url,
+        results: { markdown: md.slice(0, 50000), html: html.slice(0, 100000) },
+        error: null,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      }, { onConflict: "cache_key" });
+    }
+    return { markdown: md, html };
+  } catch (err) {
+    console.warn(`[Site Scrape] ${sourceName} error:`, err);
+    return { markdown: "", html: "" };
+  }
+}
+
+// D3: Extração de portfólio por IA a partir do markdown consolidado
+interface PortfolioIntel {
+  total_condominios_estimado: number | null;
+  tipologia_predominante: string | null; // residencial, comercial, misto, alto padrão...
+  bairros_atendidos: string[];
+  cidades_atendidas: string[];
+  ticket_medio_estimado_cota: string | null; // ex: "R$ 800-1.500"
+  diferenciais_declarados: string[];
+  evidencias: string[]; // trechos literais do site que embasam as inferências
+  confianca: "alta" | "média" | "baixa";
+}
+
+async function extractPortfolioWithAI(consolidatedMarkdown: string, brand: string, municipio: string | null, uf: string | null): Promise<PortfolioIntel | null> {
+  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+  if (!OPENROUTER_API_KEY || !consolidatedMarkdown || consolidatedMarkdown.length < 200) return null;
+  const sys = `Você é um analista B2B que extrai inteligência de portfólio de administradoras de condomínios e imobiliárias a partir do conteúdo do site delas. Retorne SOMENTE JSON válido, sem markdown, sem comentários.`;
+  const user = `Empresa: ${brand} (${municipio || "?"}/${uf || "?"})
+
+CONTEÚDO CONSOLIDADO DAS PÁGINAS INSTITUCIONAIS / PORTFÓLIO:
+"""
+${consolidatedMarkdown.slice(0, 18000)}
+"""
+
+Extraia o seguinte JSON (use null/[] quando não houver evidência clara — NÃO INVENTE):
+{
+  "total_condominios_estimado": number | null,
+  "tipologia_predominante": string | null,
+  "bairros_atendidos": string[],
+  "cidades_atendidas": string[],
+  "ticket_medio_estimado_cota": string | null,
+  "diferenciais_declarados": string[],
+  "evidencias": string[],
+  "confianca": "alta" | "média" | "baixa"
+}
+
+REGRAS:
+- "evidencias" deve conter 2-5 trechos LITERAIS curtos do conteúdo (≤140 chars cada) que sustentam as outras respostas.
+- Para "total_condominios_estimado": só preencha se houver número explícito ("administramos 120 condomínios", "+200 empreendimentos").
+- "ticket_medio_estimado_cota": só preencha se houver indício real (faixa, padrão alto declarado, condomínios premium). Caso contrário null.
+- "confianca": "alta" se ≥3 evidências sólidas; "média" se 1-2; "baixa" se inferência fraca.`;
+  try {
+    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://groupradar.lovable.app",
+        "X-Title": "GroupRadar PortfolioIntel",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [{ role: "system", content: sys }, { role: "user", content: user }],
+        max_tokens: 1200,
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!resp.ok) {
+      console.warn(`[Portfolio AI] HTTP ${resp.status}`);
+      return null;
+    }
+    const data = await resp.json();
+    const content = data?.choices?.[0]?.message?.content || "";
+    const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    return JSON.parse(cleaned) as PortfolioIntel;
+  } catch (err) {
+    console.warn("[Portfolio AI] parse/fetch error:", err);
+    return null;
+  }
+}
+
 // ============= LINKEDIN PHASE C: Cache + Dedup + Confidence Score =============
 
 // Normaliza URLs do LinkedIn pra deduplicar variantes (?trk=, trailing slash, www, casing)
