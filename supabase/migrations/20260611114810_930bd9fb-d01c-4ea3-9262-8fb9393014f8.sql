@@ -1,0 +1,3 @@
+DROP POLICY IF EXISTS "Users can insert their own usage" ON public.api_usage_logs;
+COMMENT ON TABLE public.linkedin_scrape_cache IS 'Service-role only. Do NOT add authenticated-role policies; access must go through edge functions.';
+COMMENT ON TABLE public.api_usage_logs IS 'Inserts restricted to service_role (edge functions). Authenticated users can only read their own usage; admins can read all.';
