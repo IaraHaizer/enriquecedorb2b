@@ -12,11 +12,12 @@ import NotFound from "./pages/NotFound.tsx";
 import AdminMetrics from "./pages/AdminMetrics.tsx";
 import AdminUsers from "./pages/AdminUsers.tsx";
 import AdminApiLogs from "./pages/AdminApiLogs.tsx";
+import ChangePassword from "./pages/ChangePassword.tsx";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, mustChangePassword, loading } = useAuth();
 
   if (loading) {
     return (
@@ -27,11 +28,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) return <Navigate to="/auth" replace />;
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
   return <>{children}</>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { session, role, loading } = useAuth();
+  const { session, role, mustChangePassword, loading } = useAuth();
 
   if (loading) {
     return (
@@ -42,9 +44,18 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) return <Navigate to="/auth" replace />;
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
   if (role !== 'admin') return <Navigate to="/" replace />;
   
   return <>{children}</>;
+}
+
+function ChangePasswordRoute() {
+  const { session, mustChangePassword, loading } = useAuth();
+  if (loading) return null;
+  if (!session) return <Navigate to="/auth" replace />;
+  if (!mustChangePassword) return <Navigate to="/" replace />;
+  return <ChangePassword />;
 }
 
 function AuthRoute() {
@@ -67,6 +78,7 @@ const App = () => (
           <Route path="/massa" element={<ProtectedRoute><BulkProcess /></ProtectedRoute>} />
           <Route path="/admin/metrics" element={<AdminRoute><AdminMetrics /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
+          <Route path="/change-password" element={<ChangePasswordRoute />} />
           <Route path="/admin/logs" element={<ProtectedRoute><AdminApiLogs /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -5,8 +5,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Users, Check, X, Clock } from "lucide-react";
+import { Users, Check, X, Clock, KeyRound } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 
 type UserRole = {
@@ -20,6 +25,33 @@ type UserRole = {
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resetTarget, setResetTarget] = useState<UserRole | null>(null);
+  const [tempPassword, setTempPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
+
+  async function handleResetPassword() {
+    if (!resetTarget) return;
+    if (tempPassword.length < 6) {
+      toast.error("A senha temporária precisa ter no mínimo 6 caracteres.");
+      return;
+    }
+    setResetting(true);
+    const { data, error } = await supabase.functions.invoke("admin-reset-password", {
+      body: { userId: resetTarget.id, newPassword: tempPassword },
+    });
+    setResetting(false);
+    if (error || (data && (data as { error?: string }).error)) {
+      toast.error(
+        (data as { error?: string })?.error || error?.message || "Erro ao redefinir senha"
+      );
+      return;
+    }
+    toast.success(
+      `Senha temporária definida para ${resetTarget.email}. Ele será obrigado a trocar no próximo login.`
+    );
+    setResetTarget(null);
+    setTempPassword("");
+  }
 
   useEffect(() => {
     fetchUsers();
@@ -184,6 +216,7 @@ export default function AdminUsers() {
                     <TableHead>E-mail</TableHead>
                     <TableHead>Data de Cadastro</TableHead>
                     <TableHead>Perfil de Acesso</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -205,11 +238,20 @@ export default function AdminUsers() {
                           </SelectContent>
                         </Select>
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setResetTarget(user); setTempPassword(""); }}
+                        >
+                          <KeyRound className="h-4 w-4 mr-1" /> Redefinir senha
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {approved.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                         Nenhum usuário aprovado ainda.
                       </TableCell>
                     </TableRow>
@@ -221,6 +263,41 @@ export default function AdminUsers() {
         </Card>
       </div>
       </div>
+
+      <Dialog open={!!resetTarget} onOpenChange={(open) => { if (!open) { setResetTarget(null); setTempPassword(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Redefinir senha</DialogTitle>
+            <DialogDescription>
+              Você vai definir uma <strong>senha temporária</strong> para{" "}
+              <span className="text-foreground font-medium">{resetTarget?.email}</span>.
+              No próximo login, ele será obrigado a criar uma nova senha pessoal antes de acessar o sistema.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="temp-password">Senha temporária</Label>
+            <Input
+              id="temp-password"
+              type="text"
+              placeholder="mínimo 6 caracteres"
+              value={tempPassword}
+              onChange={(e) => setTempPassword(e.target.value)}
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">
+              Envie essa senha pro usuário por um canal seguro. Ele vai trocar assim que logar.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setResetTarget(null); setTempPassword(""); }}>
+              Cancelar
+            </Button>
+            <Button onClick={handleResetPassword} disabled={resetting || tempPassword.length < 6}>
+              {resetting ? "Redefinindo..." : "Redefinir senha"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
