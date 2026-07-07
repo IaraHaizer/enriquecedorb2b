@@ -263,6 +263,41 @@ export default function AdminUsers() {
         </Card>
       </div>
       </div>
+
+      <Dialog open={!!resetTarget} onOpenChange={(open) => { if (!open) { setResetTarget(null); setTempPassword(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Redefinir senha</DialogTitle>
+            <DialogDescription>
+              Você vai definir uma <strong>senha temporária</strong> para{" "}
+              <span className="text-foreground font-medium">{resetTarget?.email}</span>.
+              No próximo login, ele será obrigado a criar uma nova senha pessoal antes de acessar o sistema.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="temp-password">Senha temporária</Label>
+            <Input
+              id="temp-password"
+              type="text"
+              placeholder="mínimo 6 caracteres"
+              value={tempPassword}
+              onChange={(e) => setTempPassword(e.target.value)}
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">
+              Envie essa senha pro usuário por um canal seguro. Ele vai trocar assim que logar.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setResetTarget(null); setTempPassword(""); }}>
+              Cancelar
+            </Button>
+            <Button onClick={handleResetPassword} disabled={resetting || tempPassword.length < 6}>
+              {resetting ? "Redefinindo..." : "Redefinir senha"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
