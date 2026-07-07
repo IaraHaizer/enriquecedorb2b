@@ -17,7 +17,7 @@ import ChangePassword from "./pages/ChangePassword.tsx";
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, mustChangePassword, loading } = useAuth();
 
   if (loading) {
     return (
@@ -28,6 +28,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) return <Navigate to="/auth" replace />;
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
   return <>{children}</>;
 }
 
