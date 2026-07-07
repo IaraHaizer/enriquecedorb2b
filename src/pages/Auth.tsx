@@ -101,6 +101,11 @@ export default function Auth() {
                 </>
               )}
             </Button>
+            {!isLogin && (
+              <p className="text-xs text-muted-foreground text-center leading-relaxed pt-1">
+                Novas contas passam por aprovação de um administrador antes do primeiro acesso.
+              </p>
+            )}
           </form>
           <div className="mt-6 text-center">
             <button
