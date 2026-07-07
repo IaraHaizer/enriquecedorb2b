@@ -216,6 +216,7 @@ export default function AdminUsers() {
                     <TableHead>E-mail</TableHead>
                     <TableHead>Data de Cadastro</TableHead>
                     <TableHead>Perfil de Acesso</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -237,11 +238,20 @@ export default function AdminUsers() {
                           </SelectContent>
                         </Select>
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setResetTarget(user); setTempPassword(""); }}
+                        >
+                          <KeyRound className="h-4 w-4 mr-1" /> Redefinir senha
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {approved.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                         Nenhum usuário aprovado ainda.
                       </TableCell>
                     </TableRow>
