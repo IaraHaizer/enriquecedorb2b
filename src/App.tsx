@@ -78,6 +78,7 @@ const App = () => (
           <Route path="/massa" element={<ProtectedRoute><BulkProcess /></ProtectedRoute>} />
           <Route path="/admin/metrics" element={<AdminRoute><AdminMetrics /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
+          <Route path="/change-password" element={<ChangePasswordRoute />} />
           <Route path="/admin/logs" element={<ProtectedRoute><AdminApiLogs /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
