@@ -12,6 +12,7 @@ import NotFound from "./pages/NotFound.tsx";
 import AdminMetrics from "./pages/AdminMetrics.tsx";
 import AdminUsers from "./pages/AdminUsers.tsx";
 import AdminApiLogs from "./pages/AdminApiLogs.tsx";
+import ChangePassword from "./pages/ChangePassword.tsx";
 
 const queryClient = new QueryClient();
 
