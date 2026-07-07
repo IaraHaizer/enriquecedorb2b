@@ -11,7 +11,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Users, Check, X, Clock, KeyRound } from "lucide-react";
+import { Users, Check, X, Clock, KeyRound, History } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 
 type UserRole = {
