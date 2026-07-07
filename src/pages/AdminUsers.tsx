@@ -68,10 +68,12 @@ export default function AdminUsers() {
     );
     setResetTarget(null);
     setTempPassword("");
+    fetchAudit();
   }
 
   useEffect(() => {
     fetchUsers();
+    fetchAudit();
   }, []);
 
   async function fetchUsers() {
