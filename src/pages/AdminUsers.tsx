@@ -280,6 +280,48 @@ export default function AdminUsers() {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              Auditoria de redefinição de senha
+            </CardTitle>
+            <CardDescription>
+              Últimos 50 registros. Toda vez que um administrador redefine a senha de um usuário, fica registrado aqui.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {audit.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                Nenhuma redefinição de senha registrada ainda.
+              </p>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Quando</TableHead>
+                      <TableHead>Administrador</TableHead>
+                      <TableHead>Usuário afetado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {audit.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="whitespace-nowrap">
+                          {new Date(row.created_at).toLocaleString('pt-BR')}
+                        </TableCell>
+                        <TableCell>{row.admin_email}</TableCell>
+                        <TableCell className="font-medium">{row.target_email}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
       </div>
 
