@@ -22,12 +22,29 @@ type UserRole = {
   created_at: string;
 };
 
+type ResetAudit = {
+  id: string;
+  target_email: string;
+  admin_email: string;
+  created_at: string;
+};
+
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserRole[]>([]);
+  const [audit, setAudit] = useState<ResetAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const [resetTarget, setResetTarget] = useState<UserRole | null>(null);
   const [tempPassword, setTempPassword] = useState("");
   const [resetting, setResetting] = useState(false);
+
+  async function fetchAudit() {
+    const { data } = await supabase
+      .from('password_reset_audit' as never)
+      .select('id, target_email, admin_email, created_at')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (data) setAudit(data as unknown as ResetAudit[]);
+  }
 
   async function handleResetPassword() {
     if (!resetTarget) return;
