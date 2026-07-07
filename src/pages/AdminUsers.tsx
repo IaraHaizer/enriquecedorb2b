@@ -25,6 +25,33 @@ type UserRole = {
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resetTarget, setResetTarget] = useState<UserRole | null>(null);
+  const [tempPassword, setTempPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
+
+  async function handleResetPassword() {
+    if (!resetTarget) return;
+    if (tempPassword.length < 6) {
+      toast.error("A senha temporária precisa ter no mínimo 6 caracteres.");
+      return;
+    }
+    setResetting(true);
+    const { data, error } = await supabase.functions.invoke("admin-reset-password", {
+      body: { userId: resetTarget.id, newPassword: tempPassword },
+    });
+    setResetting(false);
+    if (error || (data && (data as { error?: string }).error)) {
+      toast.error(
+        (data as { error?: string })?.error || error?.message || "Erro ao redefinir senha"
+      );
+      return;
+    }
+    toast.success(
+      `Senha temporária definida para ${resetTarget.email}. Ele será obrigado a trocar no próximo login.`
+    );
+    setResetTarget(null);
+    setTempPassword("");
+  }
 
   useEffect(() => {
     fetchUsers();
