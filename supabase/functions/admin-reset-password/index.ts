@@ -71,6 +71,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Busca e-mail do usuário alvo pra registrar no log
+    const { data: targetRow } = await admin
+      .from("user_roles")
+      .select("email")
+      .eq("id", targetUserId)
+      .single();
+
+    await admin.from("password_reset_audit").insert({
+      target_user_id: targetUserId,
+      target_email: targetRow?.email ?? "(desconhecido)",
+      admin_user_id: userData.user.id,
+      admin_email: userData.user.email ?? "(desconhecido)",
+    });
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
