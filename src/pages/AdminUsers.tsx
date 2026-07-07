@@ -11,7 +11,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Users, Check, X, Clock, KeyRound } from "lucide-react";
+import { Users, Check, X, Clock, KeyRound, History } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 
 type UserRole = {
@@ -22,12 +22,29 @@ type UserRole = {
   created_at: string;
 };
 
+type ResetAudit = {
+  id: string;
+  target_email: string;
+  admin_email: string;
+  created_at: string;
+};
+
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserRole[]>([]);
+  const [audit, setAudit] = useState<ResetAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const [resetTarget, setResetTarget] = useState<UserRole | null>(null);
   const [tempPassword, setTempPassword] = useState("");
   const [resetting, setResetting] = useState(false);
+
+  async function fetchAudit() {
+    const { data } = await supabase
+      .from('password_reset_audit' as never)
+      .select('id, target_email, admin_email, created_at')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (data) setAudit(data as unknown as ResetAudit[]);
+  }
 
   async function handleResetPassword() {
     if (!resetTarget) return;
@@ -51,10 +68,12 @@ export default function AdminUsers() {
     );
     setResetTarget(null);
     setTempPassword("");
+    fetchAudit();
   }
 
   useEffect(() => {
     fetchUsers();
+    fetchAudit();
   }, []);
 
   async function fetchUsers() {
@@ -259,6 +278,48 @@ export default function AdminUsers() {
                 </TableBody>
               </Table>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              Auditoria de redefinição de senha
+            </CardTitle>
+            <CardDescription>
+              Últimos 50 registros. Toda vez que um administrador redefine a senha de um usuário, fica registrado aqui.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {audit.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                Nenhuma redefinição de senha registrada ainda.
+              </p>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Quando</TableHead>
+                      <TableHead>Administrador</TableHead>
+                      <TableHead>Usuário afetado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {audit.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="whitespace-nowrap">
+                          {new Date(row.created_at).toLocaleString('pt-BR')}
+                        </TableCell>
+                        <TableCell>{row.admin_email}</TableCell>
+                        <TableCell className="font-medium">{row.target_email}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
