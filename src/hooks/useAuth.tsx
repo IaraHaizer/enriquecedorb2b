@@ -6,6 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<'admin' | 'comercial' | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
