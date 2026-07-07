@@ -173,6 +173,33 @@ export type Database = {
         }
         Relationships: []
       }
+      password_reset_audit: {
+        Row: {
+          admin_email: string
+          admin_user_id: string
+          created_at: string
+          id: string
+          target_email: string
+          target_user_id: string
+        }
+        Insert: {
+          admin_email: string
+          admin_user_id: string
+          created_at?: string
+          id?: string
+          target_email: string
+          target_user_id: string
+        }
+        Update: {
+          admin_email?: string
+          admin_user_id?: string
+          created_at?: string
+          id?: string
+          target_email?: string
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           approved: boolean
