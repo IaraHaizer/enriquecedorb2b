@@ -33,7 +33,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { session, role, loading } = useAuth();
+  const { session, role, mustChangePassword, loading } = useAuth();
 
   if (loading) {
     return (
@@ -44,9 +44,18 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) return <Navigate to="/auth" replace />;
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
   if (role !== 'admin') return <Navigate to="/" replace />;
   
   return <>{children}</>;
+}
+
+function ChangePasswordRoute() {
+  const { session, mustChangePassword, loading } = useAuth();
+  if (loading) return null;
+  if (!session) return <Navigate to="/auth" replace />;
+  if (!mustChangePassword) return <Navigate to="/" replace />;
+  return <ChangePassword />;
 }
 
 function AuthRoute() {
