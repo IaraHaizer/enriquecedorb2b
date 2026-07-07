@@ -21,11 +21,26 @@ export default function Auth() {
     try {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (error) {
+          if (error.message?.toLowerCase().includes("invalid login")) {
+            throw new Error(
+              "E-mail ou senha incorretos. Se você acabou de se cadastrar, aguarde a aprovação de um administrador."
+            );
+          }
+          throw error;
+        }
       } else {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/` },
+        });
         if (error) throw error;
-        toast.success("Conta criada! Você já pode acessar a ferramenta.");
+        toast.success(
+          "Cadastro recebido! Um administrador vai aprovar seu acesso em breve."
+        );
+        setIsLogin(true);
+        setPassword("");
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Tente novamente");
@@ -86,6 +101,11 @@ export default function Auth() {
                 </>
               )}
             </Button>
+            {!isLogin && (
+              <p className="text-xs text-muted-foreground text-center leading-relaxed pt-1">
+                Novas contas passam por aprovação de um administrador antes do primeiro acesso.
+              </p>
+            )}
           </form>
           <div className="mt-6 text-center">
             <button

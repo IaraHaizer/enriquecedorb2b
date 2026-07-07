@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { Session } from "@supabase/supabase-js";
 
 export function useAuth() {
@@ -8,39 +9,56 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchRole = async (userId: string) => {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('id', userId)
-        .single();
-      
-      if (!error && data) {
-        setRole(data.role);
-      } else {
-        setRole('comercial'); // Default fallback
-      }
-    };
+    let cancelled = false;
 
-    const handleSession = (newSession: Session | null) => {
-      setSession(newSession);
-      if (newSession?.user) {
-        fetchRole(newSession.user.id).finally(() => setLoading(false));
-      } else {
+    const checkApprovalAndSet = async (newSession: Session | null) => {
+      if (!newSession?.user) {
+        if (cancelled) return;
+        setSession(null);
         setRole(null);
         setLoading(false);
+        return;
       }
+
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role, approved')
+        .eq('id', newSession.user.id)
+        .single();
+
+      if (cancelled) return;
+
+      if (error || !data || !data.approved) {
+        // Não aprovado (ou sem registro): desloga imediatamente
+        await supabase.auth.signOut();
+        setSession(null);
+        setRole(null);
+        setLoading(false);
+        toast.error(
+          "Sua conta ainda não foi aprovada por um administrador. Você receberá acesso assim que a liberação for feita."
+        );
+        return;
+      }
+
+      setSession(newSession);
+      setRole(data.role);
+      setLoading(false);
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => handleSession(session)
+      (_event, newSession) => {
+        checkApprovalAndSet(newSession);
+      }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      handleSession(session);
+      checkApprovalAndSet(session);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = () => supabase.auth.signOut();
