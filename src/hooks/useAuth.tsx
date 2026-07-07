@@ -17,6 +17,7 @@ export function useAuth() {
         if (cancelled) return;
         setSession(null);
         setRole(null);
+        setMustChangePassword(false);
         setLoading(false);
         return;
       }
@@ -30,10 +31,10 @@ export function useAuth() {
       if (cancelled) return;
 
       if (error || !data || !data.approved) {
-        // Não aprovado (ou sem registro): desloga imediatamente
         await supabase.auth.signOut();
         setSession(null);
         setRole(null);
+        setMustChangePassword(false);
         setLoading(false);
         toast.error(
           "Sua conta ainda não foi aprovada por um administrador. Você receberá acesso assim que a liberação for feita."
@@ -43,6 +44,9 @@ export function useAuth() {
 
       setSession(newSession);
       setRole(data.role);
+      setMustChangePassword(
+        Boolean((newSession.user.user_metadata as Record<string, unknown> | null)?.must_change_password)
+      );
       setLoading(false);
     };
 
@@ -64,5 +68,5 @@ export function useAuth() {
 
   const signOut = () => supabase.auth.signOut();
 
-  return { session, role, loading, signOut };
+  return { session, role, mustChangePassword, loading, signOut };
 }
